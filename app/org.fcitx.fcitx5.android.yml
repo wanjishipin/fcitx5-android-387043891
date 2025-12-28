@@ -32,7 +32,7 @@ Builds:
     rm:
       - lib/fcitx5/src/main/cpp/prebuilt
     prebuild:
-      - sdkmanager 'cmake;3.31.6'
+      - sdkmanager 'cmake;3.28.3'
       - sed -i -e '/ImportQualifiedPost/d' $$fcitx5-android-prebuilder$$/src/Main.hs
       - sed -i -e 's/import \(.*\) qualified as/import qualified \1 as/g' $$fcitx5-android-prebuilder$$/src/*.hs
       - sed -i -e 's|https://maven.pkg.github.com|https://jitpack.io|g' ../build-logic/convention/build.gradle.kts
@@ -43,7 +43,7 @@ Builds:
       - build-logic/convention/build
     build:
       - pushd $$fcitx5-android-prebuilder$$
-      - ABI=%abi ANDROID_NDK_ROOT=$$NDK$$ CMAKE_VERSION=3.31.6 ANDROID_PLATFORM=23
+      - ABI=%abi ANDROID_NDK_ROOT=$$NDK$$ CMAKE_VERSION=3.28.3 ANDROID_PLATFORM=23
         ./build-cabal -j app
       - popd
       - mv $$fcitx5-android-prebuilder$$/build ../lib/fcitx5/src/main/cpp/prebuilt
