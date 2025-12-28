@@ -40,4 +40,8 @@ sealed class KeyAction {
     data class PickerSwitchAction(val key: PickerWindow.Key? = null) : KeyAction()
 
     data object SpaceLongPressAction : KeyAction()
+
+    data object MinimizeKeyboardAction : KeyAction()
+
+    data class ModifierAction(val modifier: org.fcitx.fcitx5.android.core.KeyState, val lock: Boolean = false) : KeyAction()
 }

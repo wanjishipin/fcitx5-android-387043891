@@ -13,6 +13,7 @@ import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.core.InputMethodEntry
 import org.fcitx.fcitx5.android.core.KeyState
 import org.fcitx.fcitx5.android.core.KeyStates
+import org.fcitx.fcitx5.android.core.KeySym
 import org.fcitx.fcitx5.android.data.prefs.AppPrefs
 import org.fcitx.fcitx5.android.data.prefs.ManagedPreference
 import org.fcitx.fcitx5.android.data.theme.Theme
@@ -31,6 +32,51 @@ class TextKeyboard(
         const val Name = "Text"
 
         val Layout: List<List<KeyDef>> = listOf(
+            // Function key row
+            listOf(
+                EscKey(0.1f),
+                MultiActionKey(
+                    displayText = "Tab",
+                    swipeText = "←Tab",
+                    pressAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Tab)),
+                    swipeAction = KeyAction.SymAction(
+                        org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Tab),
+                        KeyStates(KeyState.Shift, KeyState.Virtual)
+                    ),
+                    percentWidth = 0.13f,
+                    variant = KeyDef.Appearance.Variant.Alternative
+                ),
+                MultiActionKey(
+                    displayText = "↑",
+                    swipeText = "PgUp",
+                    pressAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Up)),
+                    swipeAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Page_Up)),
+                    percentWidth = 0.1f
+                ),
+                MultiActionKey(
+                    displayText = "↓",
+                    swipeText = "PgDn",
+                    pressAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Down)),
+                    swipeAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Page_Down)),
+                    percentWidth = 0.1f
+                ),
+                MultiActionKey(
+                    displayText = "←",
+                    swipeText = "Home",
+                    pressAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Left)),
+                    swipeAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Home)),
+                    percentWidth = 0.1f
+                ),
+                MultiActionKey(
+                    displayText = "→",
+                    swipeText = "End",
+                    pressAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Right)),
+                    swipeAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_End)),
+                    percentWidth = 0.1f
+                ),
+                CtrlKey(0.13f),
+                MinimizeKey(0.1f, KeyDef.Appearance.Variant.Alternative)
+            ),
             listOf(
                 AlphabetKey("Q", "1"),
                 AlphabetKey("W", "2"),
@@ -82,6 +128,10 @@ class TextKeyboard(
     val lang: ImageKeyView by lazy { findViewById(R.id.button_lang) }
     val space: TextKeyView by lazy { findViewById(R.id.button_space) }
     val `return`: ImageKeyView by lazy { findViewById(R.id.button_return) }
+    val ctrl: TextKeyView? by lazy { 
+        allViews.filterIsInstance(TextKeyView::class.java)
+            .firstOrNull { (it.def as? KeyDef.Appearance.Text)?.displayText == "Ctrl" }
+    }
 
     private val showLangSwitchKey = AppPrefs.getInstance().keyboard.showLangSwitchKey
 
@@ -102,6 +152,9 @@ class TextKeyboard(
     }
 
     private var capsState: CapsState = CapsState.None
+    private var ctrlState: ModifierState = ModifierState.None
+
+    enum class ModifierState { None, Once, Lock }
 
     private fun transformAlphabet(c: String): String {
         return when (capsState) {
@@ -118,22 +171,36 @@ class TextKeyboard(
         when (action) {
             is KeyAction.FcitxKeyAction -> when (source) {
                 KeyActionListener.Source.Keyboard -> {
-                    when (capsState) {
-                        CapsState.None -> {
-                            transformed = action.copy(act = action.act.lowercase())
+                    // Apply Ctrl modifier if active
+                    if (ctrlState != ModifierState.None) {
+                        // Convert character to KeySym with Ctrl modifier
+                        val char = action.act[0].lowercaseChar()
+                        transformed = KeyAction.SymAction(
+                            KeySym(char.code),
+                            KeyStates(KeyState.Ctrl, KeyState.Virtual)
+                        )
+                        if (ctrlState == ModifierState.Once) {
+                            switchCtrlState()
                         }
-                        CapsState.Once -> {
-                            transformed = action.copy(
-                                act = action.act.uppercase(),
-                                states = KeyStates(KeyState.Virtual, KeyState.Shift)
-                            )
-                            switchCapsState()
-                        }
-                        CapsState.Lock -> {
-                            transformed = action.copy(
-                                act = action.act.uppercase(),
-                                states = KeyStates(KeyState.Virtual, KeyState.CapsLock)
-                            )
+                    } else {
+                        // Apply Caps state
+                        when (capsState) {
+                            CapsState.None -> {
+                                transformed = action.copy(act = action.act.lowercase())
+                            }
+                            CapsState.Once -> {
+                                transformed = action.copy(
+                                    act = action.act.uppercase(),
+                                    states = KeyStates(KeyState.Virtual, KeyState.Shift)
+                                )
+                                switchCapsState()
+                            }
+                            CapsState.Lock -> {
+                                transformed = action.copy(
+                                    act = action.act.uppercase(),
+                                    states = KeyStates(KeyState.Virtual, KeyState.CapsLock)
+                                )
+                            }
                         }
                     }
                 }
@@ -141,9 +208,18 @@ class TextKeyboard(
                     if (capsState == CapsState.Once) {
                         switchCapsState()
                     }
+                    if (ctrlState == ModifierState.Once) {
+                        switchCtrlState()
+                    }
                 }
             }
             is KeyAction.CapsAction -> switchCapsState(action.lock)
+            is KeyAction.ModifierAction -> {
+                when (action.modifier) {
+                    KeyState.Ctrl -> switchCtrlState(action.lock)
+                    else -> {}
+                }
+            }
             else -> {}
         }
         super.onAction(transformed, source)
@@ -251,4 +327,29 @@ class TextKeyboard(
         }
     }
 
+    private fun switchCtrlState(lock: Boolean = false) {
+        ctrlState = when {
+            lock -> when (ctrlState) {
+                ModifierState.None, ModifierState.Once -> ModifierState.Lock
+                ModifierState.Lock -> ModifierState.None
+            }
+            else -> when (ctrlState) {
+                ModifierState.None -> ModifierState.Once
+                ModifierState.Once, ModifierState.Lock -> ModifierState.None
+            }
+        }
+        updateCtrlKey()
+    }
+
+    private fun updateCtrlKey() {
+        ctrl?.apply {
+            // Change appearance to indicate state - use pressed state for visual feedback
+            isPressed = ctrlState != ModifierState.None
+            alpha = when (ctrlState) {
+                ModifierState.None -> 1.0f      // Normal
+                ModifierState.Once -> 0.7f      // Semi-transparent (once)
+                ModifierState.Lock -> 1.0f      // Full opacity (locked)
+            }
+        }
+    }
 }

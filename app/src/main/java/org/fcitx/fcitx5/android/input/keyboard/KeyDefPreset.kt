@@ -329,3 +329,90 @@ class NumPadKey(
         Behavior.Press(KeyAction.SymAction(KeySym(sym), NumLockState))
     )
 )
+
+class CtrlKey(
+    percentWidth: Float = 0.15f,
+    variant: Variant = Variant.Alternative
+) : KeyDef(
+    Appearance.Text(
+        displayText = "Ctrl",
+        textSize = 16f,
+        textStyle = Typeface.BOLD,
+        percentWidth = percentWidth,
+        variant = variant
+    ),
+    setOf(
+        Behavior.Press(KeyAction.ModifierAction(org.fcitx.fcitx5.android.core.KeyState.Ctrl, false)),
+        Behavior.LongPress(KeyAction.ModifierAction(org.fcitx.fcitx5.android.core.KeyState.Ctrl, true)),
+        Behavior.DoubleTap(KeyAction.ModifierAction(org.fcitx.fcitx5.android.core.KeyState.Ctrl, true))
+    )
+)
+
+class EscKey(
+    percentWidth: Float = 0.1f,
+    variant: Variant = Variant.Normal
+) : KeyDef(
+    Appearance.Text(
+        displayText = "Esc",
+        textSize = 16f,
+        percentWidth = percentWidth,
+        variant = variant
+    ),
+    setOf(
+        Behavior.Press(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_Escape)))
+    )
+)
+
+class TabKey(
+    percentWidth: Float = 0.15f,
+    variant: Variant = Variant.Alternative
+) : KeyDef(
+    Appearance.Text(
+        displayText = "Tab",
+        textSize = 16f,
+        textStyle = Typeface.BOLD,
+        percentWidth = percentWidth,
+        variant = variant
+    ),
+    setOf(
+        Behavior.Press(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_Tab)))
+    )
+)
+
+class MinimizeKey(
+    percentWidth: Float = 0.1f,
+    variant: Variant = Variant.Alternative
+) : KeyDef(
+    Appearance.Image(
+        src = R.drawable.ic_baseline_keyboard_hide_24,
+        percentWidth = percentWidth,
+        variant = variant
+    ),
+    setOf(
+        Behavior.Press(KeyAction.MinimizeKeyboardAction)
+    )
+)
+
+class MultiActionKey(
+    displayText: String,
+    swipeText: String,
+    val pressAction: KeyAction,
+    val swipeAction: KeyAction,
+    percentWidth: Float = 0.1f,
+    variant: Variant = Variant.Normal
+) : KeyDef(
+    Appearance.AltText(
+        displayText = displayText,
+        altText = swipeText,
+        textSize = 16f,
+        percentWidth = percentWidth,
+        variant = variant
+    ),
+    setOf(
+        Behavior.Press(pressAction),
+        Behavior.Swipe(swipeAction)
+    ),
+    arrayOf(
+        Popup.AltPreview(displayText, swipeText)
+    )
+)

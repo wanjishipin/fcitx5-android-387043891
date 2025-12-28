@@ -182,6 +182,9 @@ class CommonKeyActionListener :
                         SpaceLongPressBehavior.ShowPicker -> showInputMethodPicker()
                     }
                 }
+                is KeyAction.MinimizeKeyboardAction -> {
+                    service.requestHideSelf(0)
+                }
                 else -> {}
             }
         }
