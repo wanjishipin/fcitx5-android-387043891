@@ -185,7 +185,8 @@ class CommonKeyActionListener :
                     }
                 }
                 is KeyAction.MinimizeKeyboardAction -> {
-                    service.requestHideSelf(0)
+                    // Minimize keyboard to floating button
+                    service.minimizeKeyboard()
                 }
                 is ModifiedKeyAction -> {
                     // Send key event with modifier directly through InputConnection

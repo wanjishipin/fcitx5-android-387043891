@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SPDX-License-Identifier: LGPL-2.1-or-later
+  SPDX-FileCopyrightText: Copyright 2021-2025 Fcitx5 for Android Contributors
+-->
+<org.fcitx.fcitx5.android.input.keyboard.FloatingButtonView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/floating_button"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/transparent"/>

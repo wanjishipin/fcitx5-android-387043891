@@ -100,6 +100,10 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     private lateinit var contentView: FrameLayout
     private var inputView: InputView? = null
     private var candidatesView: CandidatesView? = null
+    
+    // Minimized keyboard state
+    private var isMinimized = false
+    private var floatingButtonView: org.fcitx.fcitx5.android.input.keyboard.FloatingButtonView? = null
 
     private val navbarMgr = NavigationBarManager()
     private val inputDeviceMgr = InputDeviceManager { isVirtualKeyboard ->
@@ -554,20 +558,67 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     }
 
     override fun setInputView(view: View) {
+        // Remove from parent if needed (like Unexpected-Keyboard does)
+        (view.parent as? ViewGroup)?.removeView(view)
         super.setInputView(view)
-        // input method layout has not changed in 11 years:
-        // https://android.googlesource.com/platform/frameworks/base/+/ae3349e1c34f7aceddc526cd11d9ac44951e97b6/core/res/res/layout/input_method.xml
-        // expand inputArea to fullscreen
-        contentView.findViewById<FrameLayout>(android.R.id.inputArea)
-            .updateLayoutParams<ViewGroup.LayoutParams> {
+        
+        val inputArea = contentView.findViewById<FrameLayout>(android.R.id.inputArea)
+        val inputAreaParent = inputArea.parent as? View
+        
+        if (view is org.fcitx.fcitx5.android.input.keyboard.FloatingButtonView) {
+            // For floating button, use wrap_content to only take minimal space
+            inputArea.updateLayoutParams<ViewGroup.LayoutParams> {
+                height = ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            view.updateLayoutParams<ViewGroup.LayoutParams> {
+                height = ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            // Set gravity to BOTTOM so floating button appears at bottom of screen
+            inputAreaParent?.let { parent ->
+                parent.updateLayoutParams<ViewGroup.LayoutParams> {
+                    height = ViewGroup.LayoutParams.WRAP_CONTENT
+                }
+                if (parent.layoutParams is android.widget.FrameLayout.LayoutParams) {
+                    parent.updateLayoutParams<android.widget.FrameLayout.LayoutParams> {
+                        gravity = android.view.Gravity.BOTTOM
+                    }
+                } else if (parent.layoutParams is android.widget.LinearLayout.LayoutParams) {
+                    parent.updateLayoutParams<android.widget.LinearLayout.LayoutParams> {
+                        gravity = android.view.Gravity.BOTTOM
+                    }
+                }
+            }
+            // Update window to wrap content
+            window.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        } else {
+            // expand inputArea to fullscreen for normal keyboard
+            inputArea.updateLayoutParams<ViewGroup.LayoutParams> {
                 height = ViewGroup.LayoutParams.MATCH_PARENT
             }
-        /**
-         * expand InputView to fullscreen, since [android.inputmethodservice.InputMethodService.setInputView]
-         * would set InputView's height to [ViewGroup.LayoutParams.WRAP_CONTENT]
-         */
-        view.updateLayoutParams<ViewGroup.LayoutParams> {
-            height = ViewGroup.LayoutParams.MATCH_PARENT
+            /**
+             * expand InputView to fullscreen, since [android.inputmethodservice.InputMethodService.setInputView]
+             * would set InputView's height to [ViewGroup.LayoutParams.WRAP_CONTENT]
+             */
+            view.updateLayoutParams<ViewGroup.LayoutParams> {
+                height = ViewGroup.LayoutParams.MATCH_PARENT
+            }
+            // Reset gravity for normal keyboard
+            inputAreaParent?.let { parent ->
+                parent.updateLayoutParams<ViewGroup.LayoutParams> {
+                    height = ViewGroup.LayoutParams.MATCH_PARENT
+                }
+                if (parent.layoutParams is android.widget.FrameLayout.LayoutParams) {
+                    parent.updateLayoutParams<android.widget.FrameLayout.LayoutParams> {
+                        gravity = android.view.Gravity.BOTTOM
+                    }
+                } else if (parent.layoutParams is android.widget.LinearLayout.LayoutParams) {
+                    parent.updateLayoutParams<android.widget.LinearLayout.LayoutParams> {
+                        gravity = android.view.Gravity.BOTTOM
+                    }
+                }
+            }
+            // Restore window to match parent
+            window.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
     }
 
@@ -575,10 +626,64 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         win.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
+    /**
+     * Minimize the keyboard to a floating button
+     */
+    fun minimizeKeyboard() {
+        if (isMinimized) return
+        isMinimized = true
+        
+        if (floatingButtonView == null) {
+            floatingButtonView = org.fcitx.fcitx5.android.input.keyboard.FloatingButtonView(this).apply {
+                val theme = ThemeManager.activeTheme
+                setColors(theme.keyBackgroundColor, theme.keyTextColor)
+                setOnRestoreListener(object : org.fcitx.fcitx5.android.input.keyboard.FloatingButtonView.OnRestoreListener {
+                    override fun onRestore() {
+                        restoreKeyboard()
+                    }
+                })
+            }
+        }
+        
+        // Remove from parent if needed
+        (floatingButtonView?.parent as? ViewGroup)?.removeView(floatingButtonView)
+        setInputView(floatingButtonView!!)
+    }
+    
+    /**
+     * Restore the keyboard from minimized state
+     */
+    fun restoreKeyboard() {
+        if (!isMinimized) return
+        isMinimized = false
+        
+        inputView?.let { view ->
+            // Remove from parent if needed
+            (view.parent as? ViewGroup)?.removeView(view)
+            setInputView(view)
+            // Ensure InputDeviceManager knows about the view
+            inputDeviceMgr.setInputView(view)
+            // Request layout update
+            view.requestLayout()
+        }
+    }
+
     private var inputViewLocation = intArrayOf(0, 0)
 
     override fun onComputeInsets(outInsets: Insets) {
-        if (inputDeviceMgr.isVirtualKeyboard) {
+        if (isMinimized) {
+            // When minimized, only the floating button area should be touchable
+            floatingButtonView?.let { btn ->
+                btn.getLocationInWindow(inputViewLocation)
+                val btnHeight = btn.measuredHeight.takeIf { it > 0 } ?: (40 * resources.displayMetrics.density).toInt()
+                val topInset = decorView.height - btnHeight
+                outInsets.apply {
+                    contentTopInsets = topInset
+                    visibleTopInsets = topInset
+                    touchableInsets = Insets.TOUCHABLE_INSETS_CONTENT
+                }
+            }
+        } else if (inputDeviceMgr.isVirtualKeyboard) {
             inputView?.keyboardView?.getLocationInWindow(inputViewLocation)
             outInsets.apply {
                 contentTopInsets = inputViewLocation[1]

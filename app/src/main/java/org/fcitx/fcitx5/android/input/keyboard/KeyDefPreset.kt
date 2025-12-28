@@ -384,8 +384,9 @@ class MinimizeKey(
     percentWidth: Float = 0.1f,
     variant: Variant = Variant.Alternative
 ) : KeyDef(
-    Appearance.Image(
-        src = R.drawable.ic_baseline_keyboard_hide_24,
+    Appearance.Text(
+        displayText = "Min",
+        textSize = 16f,
         percentWidth = percentWidth,
         variant = variant
     ),
