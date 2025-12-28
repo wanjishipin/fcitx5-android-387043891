@@ -359,7 +359,7 @@ class EscKey(
         variant = variant
     ),
     setOf(
-        Behavior.Press(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_Escape)))
+        Behavior.Press(KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_ESCAPE, 0))
     )
 )
 
@@ -375,7 +375,8 @@ class TabKey(
         variant = variant
     ),
     setOf(
-        Behavior.Press(KeyAction.SymAction(KeySym(FcitxKeyMapping.FcitxKey_Tab)))
+        Behavior.Press(KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_TAB, 0)),
+        Behavior.Repeat(KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_TAB, 0))
     )
 )
 
@@ -410,8 +411,8 @@ class MultiActionKey(
     ),
     setOf(
         Behavior.Press(pressAction),
-        Behavior.SwipeAny(swipeAction),  // Use SwipeAny for any-direction swipe
-        Behavior.LongPress(swipeAction)  // Also trigger on long press for easier access
+        Behavior.Repeat(pressAction),     // Long press repeats the primary action
+        Behavior.SwipeAny(swipeAction)    // Swipe triggers the secondary action
     ),
     arrayOf(
         Popup.AltPreview(displayText, swipeText)

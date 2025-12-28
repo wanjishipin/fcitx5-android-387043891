@@ -38,40 +38,37 @@ class TextKeyboard(
                 MultiActionKey(
                     displayText = "Tab",
                     swipeText = "←Tab",
-                    pressAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Tab)),
-                    swipeAction = KeyAction.SymAction(
-                        org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Tab),
-                        KeyStates(KeyState.Shift, KeyState.Virtual)
-                    ),
+                    pressAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_TAB, 0),
+                    swipeAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_TAB, android.view.KeyEvent.META_SHIFT_ON),
                     percentWidth = 0.13f,
                     variant = KeyDef.Appearance.Variant.Alternative
                 ),
                 MultiActionKey(
                     displayText = "↑",
                     swipeText = "PgUp",
-                    pressAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Up)),
-                    swipeAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Page_Up)),
+                    pressAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_DPAD_UP, 0),
+                    swipeAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_PAGE_UP, 0),
                     percentWidth = 0.1f
                 ),
                 MultiActionKey(
                     displayText = "↓",
                     swipeText = "PgDn",
-                    pressAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Down)),
-                    swipeAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Page_Down)),
+                    pressAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_DPAD_DOWN, 0),
+                    swipeAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_PAGE_DOWN, 0),
                     percentWidth = 0.1f
                 ),
                 MultiActionKey(
                     displayText = "←",
                     swipeText = "Home",
-                    pressAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Left)),
-                    swipeAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Home)),
+                    pressAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_DPAD_LEFT, 0),
+                    swipeAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_MOVE_HOME, 0),
                     percentWidth = 0.1f
                 ),
                 MultiActionKey(
                     displayText = "→",
                     swipeText = "End",
-                    pressAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_Right)),
-                    swipeAction = KeyAction.SymAction(org.fcitx.fcitx5.android.core.KeySym(org.fcitx.fcitx5.android.core.FcitxKeyMapping.FcitxKey_End)),
+                    pressAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_DPAD_RIGHT, 0),
+                    swipeAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_MOVE_END, 0),
                     percentWidth = 0.1f
                 ),
                 CtrlKey(0.13f),
