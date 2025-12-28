@@ -25,6 +25,7 @@ import org.fcitx.fcitx5.android.input.keyboard.KeyAction.CommitAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.DeleteSelectionAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.FcitxKeyAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.LangSwitchAction
+import org.fcitx.fcitx5.android.input.keyboard.KeyAction.ModifiedKeyAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.MoveSelectionAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.PickerSwitchAction
 import org.fcitx.fcitx5.android.input.keyboard.KeyAction.QuickPhraseAction
@@ -94,6 +95,7 @@ class CommonKeyActionListener :
                     sendKey(action.act, action.states.states, action.code)
                 }
                 is SymAction -> service.postFcitxJob {
+                    android.util.Log.d("CommonKeyActionListener", "SymAction: sym=${action.sym}, states=${action.states}")
                     sendKey(action.sym, action.states)
                 }
                 is CommitAction -> service.postFcitxJob {
@@ -184,6 +186,32 @@ class CommonKeyActionListener :
                 }
                 is KeyAction.MinimizeKeyboardAction -> {
                     service.requestHideSelf(0)
+                }
+                is ModifiedKeyAction -> {
+                    // Send key event with modifier directly through InputConnection
+                    service.currentInputConnection?.let { ic ->
+                        val now = android.os.SystemClock.uptimeMillis()
+                        ic.sendKeyEvent(android.view.KeyEvent(
+                            now, now,
+                            android.view.KeyEvent.ACTION_DOWN,
+                            action.keyCode,
+                            0, // repeat
+                            action.metaState,
+                            android.view.KeyCharacterMap.VIRTUAL_KEYBOARD,
+                            0, // scancode
+                            android.view.KeyEvent.FLAG_SOFT_KEYBOARD or android.view.KeyEvent.FLAG_KEEP_TOUCH_MODE
+                        ))
+                        ic.sendKeyEvent(android.view.KeyEvent(
+                            now, now,
+                            android.view.KeyEvent.ACTION_UP,
+                            action.keyCode,
+                            0, // repeat
+                            action.metaState,
+                            android.view.KeyCharacterMap.VIRTUAL_KEYBOARD,
+                            0, // scancode
+                            android.view.KeyEvent.FLAG_SOFT_KEYBOARD or android.view.KeyEvent.FLAG_KEEP_TOUCH_MODE
+                        ))
+                    }
                 }
                 else -> {}
             }

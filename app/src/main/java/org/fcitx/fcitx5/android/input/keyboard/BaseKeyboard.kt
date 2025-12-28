@@ -250,6 +250,28 @@ abstract class BaseKeyboard(
                             onAction(it.action)
                         }
                     }
+                    is KeyDef.Behavior.SwipeAny -> {
+                        // Swipe in any direction triggers the action
+                        swipeEnabled = true
+                        swipeThresholdX = inputSwipeThreshold
+                        swipeThresholdY = inputSwipeThreshold
+                        val oldOnGestureListener = onGestureListener ?: OnGestureListener.Empty
+                        onGestureListener = OnGestureListener { view, event ->
+                            when (event.type) {
+                                GestureType.Up -> {
+                                    // Trigger if any significant swipe occurred (X or Y)
+                                    val hasSwipe = kotlin.math.abs(event.totalX) > 0 || kotlin.math.abs(event.totalY) > 0
+                                    if (!event.consumed && hasSwipe) {
+                                        onAction(it.action)
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                else -> false
+                            } || oldOnGestureListener.onGesture(view, event)
+                        }
+                    }
                 }
             }
             def.popup?.forEach {

@@ -107,6 +107,13 @@ open class KeyDef(
             val action: KeyAction
         ) : Behavior()
 
+        /**
+         * Swipe in any direction to trigger action (ignores swipeSymbolDirection preference)
+         */
+        class SwipeAny(
+            val action: KeyAction
+        ) : Behavior()
+
         class DoubleTap(
             val action: KeyAction
         ) : Behavior()

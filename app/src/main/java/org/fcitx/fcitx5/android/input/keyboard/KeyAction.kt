@@ -44,4 +44,12 @@ sealed class KeyAction {
     data object MinimizeKeyboardAction : KeyAction()
 
     data class ModifierAction(val modifier: org.fcitx.fcitx5.android.core.KeyState, val lock: Boolean = false) : KeyAction()
+
+    /**
+     * Send a key event with modifier (Ctrl, Alt, etc.) directly through InputConnection
+     */
+    data class ModifiedKeyAction(
+        val keyCode: Int,
+        val metaState: Int
+    ) : KeyAction()
 }

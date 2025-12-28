@@ -173,12 +173,16 @@ class TextKeyboard(
                 KeyActionListener.Source.Keyboard -> {
                     // Apply Ctrl modifier if active
                     if (ctrlState != ModifierState.None) {
-                        // Convert character to KeySym with Ctrl modifier
-                        val char = action.act[0].lowercaseChar()
-                        transformed = KeyAction.SymAction(
-                            KeySym(char.code),
-                            KeyStates(KeyState.Ctrl, KeyState.Virtual)
-                        )
+                        // Convert character to Android KeyEvent with Ctrl modifier
+                        val char = action.act[0].uppercaseChar()
+                        val keyCode = charToKeyCode(char)
+                        if (keyCode != null) {
+                            transformed = KeyAction.ModifiedKeyAction(
+                                keyCode = keyCode,
+                                metaState = android.view.KeyEvent.META_CTRL_ON or android.view.KeyEvent.META_CTRL_LEFT_ON
+                            )
+                            android.util.Log.d("TextKeyboard", "Ctrl+$char: keyCode=$keyCode")
+                        }
                         if (ctrlState == ModifierState.Once) {
                             switchCtrlState()
                         }
@@ -350,6 +354,51 @@ class TextKeyboard(
                 ModifierState.Once -> 0.7f      // Semi-transparent (once)
                 ModifierState.Lock -> 1.0f      // Full opacity (locked)
             }
+        }
+    }
+
+    /**
+     * Convert character to Android KeyCode for use with KeyEvent
+     */
+    private fun charToKeyCode(char: Char): Int? {
+        return when (char.uppercaseChar()) {
+            'A' -> android.view.KeyEvent.KEYCODE_A
+            'B' -> android.view.KeyEvent.KEYCODE_B
+            'C' -> android.view.KeyEvent.KEYCODE_C
+            'D' -> android.view.KeyEvent.KEYCODE_D
+            'E' -> android.view.KeyEvent.KEYCODE_E
+            'F' -> android.view.KeyEvent.KEYCODE_F
+            'G' -> android.view.KeyEvent.KEYCODE_G
+            'H' -> android.view.KeyEvent.KEYCODE_H
+            'I' -> android.view.KeyEvent.KEYCODE_I
+            'J' -> android.view.KeyEvent.KEYCODE_J
+            'K' -> android.view.KeyEvent.KEYCODE_K
+            'L' -> android.view.KeyEvent.KEYCODE_L
+            'M' -> android.view.KeyEvent.KEYCODE_M
+            'N' -> android.view.KeyEvent.KEYCODE_N
+            'O' -> android.view.KeyEvent.KEYCODE_O
+            'P' -> android.view.KeyEvent.KEYCODE_P
+            'Q' -> android.view.KeyEvent.KEYCODE_Q
+            'R' -> android.view.KeyEvent.KEYCODE_R
+            'S' -> android.view.KeyEvent.KEYCODE_S
+            'T' -> android.view.KeyEvent.KEYCODE_T
+            'U' -> android.view.KeyEvent.KEYCODE_U
+            'V' -> android.view.KeyEvent.KEYCODE_V
+            'W' -> android.view.KeyEvent.KEYCODE_W
+            'X' -> android.view.KeyEvent.KEYCODE_X
+            'Y' -> android.view.KeyEvent.KEYCODE_Y
+            'Z' -> android.view.KeyEvent.KEYCODE_Z
+            '0' -> android.view.KeyEvent.KEYCODE_0
+            '1' -> android.view.KeyEvent.KEYCODE_1
+            '2' -> android.view.KeyEvent.KEYCODE_2
+            '3' -> android.view.KeyEvent.KEYCODE_3
+            '4' -> android.view.KeyEvent.KEYCODE_4
+            '5' -> android.view.KeyEvent.KEYCODE_5
+            '6' -> android.view.KeyEvent.KEYCODE_6
+            '7' -> android.view.KeyEvent.KEYCODE_7
+            '8' -> android.view.KeyEvent.KEYCODE_8
+            '9' -> android.view.KeyEvent.KEYCODE_9
+            else -> null
         }
     }
 }

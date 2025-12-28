@@ -410,7 +410,8 @@ class MultiActionKey(
     ),
     setOf(
         Behavior.Press(pressAction),
-        Behavior.Swipe(swipeAction)
+        Behavior.SwipeAny(swipeAction),  // Use SwipeAny for any-direction swipe
+        Behavior.LongPress(swipeAction)  // Also trigger on long press for easier access
     ),
     arrayOf(
         Popup.AltPreview(displayText, swipeText)
