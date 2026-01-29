@@ -395,6 +395,21 @@ class MinimizeKey(
     )
 )
 
+class MenuKey(
+    percentWidth: Float = 0.1f,
+    variant: Variant = Variant.Normal
+) : KeyDef(
+    Appearance.Text(
+        displayText = "Menu",
+        textSize = 16f,
+        percentWidth = percentWidth,
+        variant = variant
+    ),
+    setOf(
+        Behavior.Press(KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_MENU, 0))
+    )
+)
+
 class MultiActionKey(
     displayText: String,
     swipeText: String,

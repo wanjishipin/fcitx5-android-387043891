@@ -40,7 +40,7 @@ class TextKeyboard(
                     swipeText = "←Tab",
                     pressAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_TAB, 0),
                     swipeAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_TAB, android.view.KeyEvent.META_SHIFT_ON),
-                    percentWidth = 0.13f,
+                    percentWidth = 0.12f,
                     variant = KeyDef.Appearance.Variant.Alternative
                 ),
                 MultiActionKey(
@@ -71,7 +71,8 @@ class TextKeyboard(
                     swipeAction = KeyAction.ModifiedKeyAction(android.view.KeyEvent.KEYCODE_MOVE_END, 0),
                     percentWidth = 0.1f
                 ),
-                CtrlKey(0.13f),
+                CtrlKey(0.12f),
+                MenuKey(0.1f),
                 MinimizeKey(0.1f, KeyDef.Appearance.Variant.Alternative)
             ),
             listOf(
