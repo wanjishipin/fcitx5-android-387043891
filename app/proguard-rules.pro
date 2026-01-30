@@ -8,6 +8,11 @@
 # disable obfuscation
 -dontobfuscate
 
+# Keep Shizuku UserService (must be instantiable by Shizuku)
+-keep class org.fcitx.fcitx5.android.service.ShellService { *; }
+-keep class org.fcitx.fcitx5.android.service.IShellService { *; }
+-keep class org.fcitx.fcitx5.android.service.IShellService$* { *; }
+
 # Keep JNI interface
 -keep class org.fcitx.fcitx5.android.core.* { *; }
 -keep class org.fcitx.fcitx5.android.data.pinyin.customphrase.PinyinCustomPhrase {

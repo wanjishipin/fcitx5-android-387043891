@@ -188,6 +188,10 @@ class CommonKeyActionListener :
                     // Minimize keyboard to floating button
                     service.minimizeKeyboard()
                 }
+                is KeyAction.FloatingKeyboardAction -> {
+                    // Toggle floating keyboard mode
+                    service.toggleFloatingKeyboard()
+                }
                 is ModifiedKeyAction -> {
                     // Send key event with modifier directly through InputConnection
                     service.currentInputConnection?.let { ic ->

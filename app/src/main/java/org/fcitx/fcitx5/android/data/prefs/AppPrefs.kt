@@ -264,6 +264,9 @@ class AppPrefs(private val sharedPreferences: SharedPreferences) {
             expandedCandidateGridSpanCountLandscape = secondary
         }
 
+        val enableFloatingKeyboard =
+            switch(R.string.enable_floating_keyboard, "enable_floating_keyboard", false)
+
     }
 
     inner class Candidates :

@@ -53,6 +53,7 @@ android {
 
     buildFeatures {
         viewBinding = true
+        aidl = true
     }
 
     androidResources {
@@ -123,6 +124,8 @@ dependencies {
     implementation(libs.flexbox)
     implementation(libs.dependency)
     implementation(libs.timber)
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
     implementation(libs.splitties.bitflags)
     implementation(libs.splitties.dimensions)
     implementation(libs.splitties.resources)

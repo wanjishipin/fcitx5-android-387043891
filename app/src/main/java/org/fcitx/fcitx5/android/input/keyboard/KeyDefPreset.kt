@@ -410,6 +410,21 @@ class MenuKey(
     )
 )
 
+class FloatingKeyboardKey(
+    percentWidth: Float = 0.1f,
+    variant: Variant = Variant.Alternative
+) : KeyDef(
+    Appearance.Text(
+        displayText = "Float",
+        textSize = 14f,
+        percentWidth = percentWidth,
+        variant = variant
+    ),
+    setOf(
+        Behavior.Press(KeyAction.FloatingKeyboardAction)
+    )
+)
+
 class MultiActionKey(
     displayText: String,
     swipeText: String,

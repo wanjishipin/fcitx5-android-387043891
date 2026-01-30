@@ -52,4 +52,9 @@ sealed class KeyAction {
         val keyCode: Int,
         val metaState: Int
     ) : KeyAction()
+    
+    /**
+     * Toggle floating keyboard mode
+     */
+    data object FloatingKeyboardAction : KeyAction()
 }

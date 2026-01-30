@@ -65,6 +65,9 @@ import org.fcitx.fcitx5.android.data.theme.Theme
 import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.cursor.CursorRange
 import org.fcitx.fcitx5.android.input.cursor.CursorTracker
+import org.fcitx.fcitx5.android.input.keyboard.FloatingKeyboardManager
+import org.fcitx.fcitx5.android.service.FloatingKeyboardAccessibilityService
+import org.fcitx.fcitx5.android.utils.FloatingKeyboardPermissionHelper
 import org.fcitx.fcitx5.android.utils.InputMethodUtil
 import org.fcitx.fcitx5.android.utils.alpha
 import org.fcitx.fcitx5.android.utils.forceShowSelf
@@ -104,6 +107,10 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     // Minimized keyboard state
     private var isMinimized = false
     private var floatingButtonView: org.fcitx.fcitx5.android.input.keyboard.FloatingButtonView? = null
+    
+    // Floating keyboard
+    private var floatingKeyboardManager: FloatingKeyboardManager? = null
+    private var isFloatingKeyboardActive = false
 
     private val navbarMgr = NavigationBarManager()
     private val inputDeviceMgr = InputDeviceManager { isVirtualKeyboard ->
@@ -225,6 +232,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         decorView = window.window!!.decorView
         contentView = decorView.findViewById(android.R.id.content)
         lastKnownConfig = resources.configuration
+        
+        // Initialize floating keyboard manager
+        floatingKeyboardManager = FloatingKeyboardManager(this)
     }
 
     private fun handleFcitxEvent(event: FcitxEvent<*>) {
@@ -667,6 +677,69 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
             view.requestLayout()
         }
     }
+
+    /**
+     * Show floating keyboard overlay
+     */
+    fun showFloatingKeyboard() {
+        if (isFloatingKeyboardActive) return
+        
+        // Check permissions
+        if (!FloatingKeyboardPermissionHelper.hasOverlayPermission(this)) {
+            FloatingKeyboardPermissionHelper.requestOverlayPermission(this)
+            return
+        }
+        
+        if (!FloatingKeyboardPermissionHelper.hasAccessibilityPermission()) {
+            FloatingKeyboardPermissionHelper.requestAccessibilityPermission(this)
+            return
+        }
+        
+        isFloatingKeyboardActive = true
+        
+        // Create and show floating keyboard
+        val theme = ThemeManager.activeTheme
+        floatingKeyboardManager?.showFloatingKeyboard(theme) { keyCode, metaState ->
+            // Send key event through accessibility service
+            Timber.w("FloatingKeyboard callback: keyCode=$keyCode, metaState=$metaState")
+            val service = FloatingKeyboardAccessibilityService.getInstance()
+            if (service != null) {
+                val result = service.sendKeyEvent(keyCode, metaState)
+                Timber.w("FloatingKeyboard sendKeyEvent result: $result")
+            } else {
+                Timber.w("FloatingKeyboard: AccessibilityService not available")
+            }
+        }
+        
+        // Hide the regular input view
+        requestHideSelf(0)
+    }
+    
+    /**
+     * Hide floating keyboard overlay
+     */
+    fun hideFloatingKeyboard() {
+        if (!isFloatingKeyboardActive) return
+        isFloatingKeyboardActive = false
+        
+        floatingKeyboardManager?.hide()
+    }
+    
+    /**
+     * Toggle floating keyboard on/off
+     */
+    fun toggleFloatingKeyboard() {
+        if (isFloatingKeyboardActive) {
+            hideFloatingKeyboard()
+        } else {
+            showFloatingKeyboard()
+        }
+    }
+    
+    /**
+     * Check if floating keyboard is active
+     */
+    fun isFloatingKeyboardShowing(): Boolean = isFloatingKeyboardActive
 
     private var inputViewLocation = intArrayOf(0, 0)
 

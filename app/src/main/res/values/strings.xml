@@ -316,4 +316,13 @@
     <string name="emoji_skin_tone_type_6">🏿 Type-6</string>
     <string name="hide_unsupported_emojis">Hide unsupported Emojis</string>
     <string name="key_border_stroke">Enable stroke for key border</string>
+    <string name="accessibility_service_description">Enable this service to allow the floating keyboard to send key events to applications even when the input method is not focused.</string>
+    <string name="floating_keyboard">Floating Keyboard</string>
+    <string name="enable_floating_keyboard">Enable floating keyboard</string>
+    <string name="floating_keyboard_summary">Show keyboard as an overlay window that can be moved and resized</string>
+    <string name="accessibility_service_required">Accessibility service required</string>
+    <string name="accessibility_service_required_message">To use the floating keyboard, please enable the accessibility service in Settings</string>
+    <string name="overlay_permission_required">Overlay permission required</string>
+    <string name="overlay_permission_required_message">To use the floating keyboard, please grant permission to display over other apps</string>
+    <string name="open_settings">Open Settings</string>
 </resources>
