@@ -34,7 +34,12 @@ class FloatingKeyboardManager(private val context: Context) {
     
     private var floatingContainer: LinearLayout? = null
     private var keyboardContainer: FrameLayout? = null
+    private var minimizedView: FrameLayout? = null
     private var onKeyEventCallback: ((Int, Int) -> Unit)? = null
+    
+    // State tracking
+    private var isMinimized = false
+    private var currentTheme: Theme? = null
     
     // For drag functionality
     private var initialX: Int = 0
@@ -48,7 +53,7 @@ class FloatingKeyboardManager(private val context: Context) {
     private val initialRepeatDelay = 400L  // Initial delay before repeat starts
     private val repeatInterval = 50L       // Interval between repeats
     
-    // Window parameters
+    // Window parameters for full keyboard
     private val windowParams = WindowManager.LayoutParams().apply {
         type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -67,8 +72,26 @@ class FloatingKeyboardManager(private val context: Context) {
         x = (context.resources.displayMetrics.widthPixels * 0.025).toInt()
         y = (context.resources.displayMetrics.heightPixels * 0.5).toInt()
     }
+    
+    // Window parameters for minimized view
+    private val minimizedParams = WindowManager.LayoutParams().apply {
+        type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+        flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        format = PixelFormat.TRANSLUCENT
+        gravity = Gravity.TOP or Gravity.START
+        width = WindowManager.LayoutParams.WRAP_CONTENT
+        height = WindowManager.LayoutParams.WRAP_CONTENT
+        x = context.resources.displayMetrics.widthPixels - 80
+        y = (context.resources.displayMetrics.heightPixels * 0.3).toInt()
+    }
 
-    fun isShowing(): Boolean = floatingContainer?.parent != null
+    fun isShowing(): Boolean = floatingContainer?.parent != null || minimizedView?.parent != null
 
     /**
      * Show floating keyboard with a simple key layout
@@ -85,17 +108,19 @@ class FloatingKeyboardManager(private val context: Context) {
         }
 
         onKeyEventCallback = onKeyEvent
+        currentTheme = theme
+        isMinimized = false
         
         val density = context.resources.displayMetrics.density
         
-        // Create main container
+        // Create main container with transparent background
         floatingContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(theme.barColor)
+            setBackgroundColor(Color.TRANSPARENT)
             elevation = 8f * density
         }
         
-        // Create title bar with drag handle and close button
+        // Create title bar with drag handle, minimize and close buttons
         val titleBar = createTitleBar(theme, density)
         floatingContainer?.addView(titleBar)
         
@@ -105,7 +130,7 @@ class FloatingKeyboardManager(private val context: Context) {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            setBackgroundColor(theme.keyboardColor)
+            setBackgroundColor(Color.TRANSPARENT)
         }
         
         // Add a simple floating keyboard layout
@@ -121,6 +146,163 @@ class FloatingKeyboardManager(private val context: Context) {
         }
     }
     
+    /**
+     * Minimize the floating keyboard to a small icon
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun minimize() {
+        if (isMinimized) return
+        
+        val theme = currentTheme ?: return
+        val density = context.resources.displayMetrics.density
+        
+        // Save current position for restore
+        windowParams.let { params ->
+            minimizedParams.x = params.x + params.width - (56 * density).toInt()
+            minimizedParams.y = params.y
+        }
+        
+        // Remove full keyboard
+        floatingContainer?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to remove floating keyboard")
+            }
+        }
+        floatingContainer = null
+        keyboardContainer = null
+        
+        // Create minimized view
+        minimizedView = FrameLayout(context).apply {
+            val size = (56 * density).toInt()
+            layoutParams = FrameLayout.LayoutParams(size, size)
+            setBackgroundColor(Color.TRANSPARENT)
+            elevation = 8f * density
+        }
+        
+        // Add keyboard icon
+        val iconButton = ImageButton(context).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setImageResource(android.R.drawable.ic_menu_recent_history)
+            setBackgroundColor(Color.TRANSPARENT)
+            setColorFilter(theme.keyTextColor)
+            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+            setPadding((8 * density).toInt(), (8 * density).toInt(), 
+                (8 * density).toInt(), (8 * density).toInt())
+        }
+        
+        // Click to restore
+        iconButton.setOnClickListener {
+            restore()
+        }
+        
+        // Drag support for minimized view
+        iconButton.setOnTouchListener { _, event ->
+            handleMinimizedDragTouch(event)
+        }
+        
+        minimizedView?.addView(iconButton)
+        
+        try {
+            windowManager.addView(minimizedView, minimizedParams)
+            isMinimized = true
+            Timber.d("Floating keyboard minimized")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to show minimized view")
+        }
+    }
+    
+    /**
+     * Restore the floating keyboard from minimized state
+     */
+    private fun restore() {
+        if (!isMinimized) return
+        
+        val theme = currentTheme ?: return
+        val callback = onKeyEventCallback ?: return
+        
+        // Save minimized position for keyboard position
+        minimizedParams.let { params ->
+            windowParams.x = (context.resources.displayMetrics.widthPixels * 0.025).toInt()
+            windowParams.y = params.y
+        }
+        
+        // Remove minimized view
+        minimizedView?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to remove minimized view")
+            }
+        }
+        minimizedView = null
+        isMinimized = false
+        
+        // Show full keyboard again
+        val density = context.resources.displayMetrics.density
+        
+        floatingContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.TRANSPARENT)
+            elevation = 8f * density
+        }
+        
+        val titleBar = createTitleBar(theme, density)
+        floatingContainer?.addView(titleBar)
+        
+        keyboardContainer = FrameLayout(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            setBackgroundColor(Color.TRANSPARENT)
+        }
+        
+        val keyboardLayout = createSimpleKeyboardLayout(theme, density)
+        keyboardContainer?.addView(keyboardLayout)
+        floatingContainer?.addView(keyboardContainer)
+
+        try {
+            windowManager.addView(floatingContainer, windowParams)
+            Timber.d("Floating keyboard restored")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to restore floating keyboard")
+        }
+    }
+    
+    private fun handleMinimizedDragTouch(event: MotionEvent): Boolean {
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                initialX = minimizedParams.x
+                initialY = minimizedParams.y
+                initialTouchX = event.rawX
+                initialTouchY = event.rawY
+                return false // Allow click events
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = event.rawX - initialTouchX
+                val dy = event.rawY - initialTouchY
+                
+                // Only start drag if moved enough
+                if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                    minimizedParams.x = initialX + dx.toInt()
+                    minimizedParams.y = initialY + dy.toInt()
+                    try {
+                        windowManager.updateViewLayout(minimizedView, minimizedParams)
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to update minimized view position")
+                    }
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    
     private fun createTitleBar(theme: Theme, density: Float): LinearLayout {
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -128,7 +310,7 @@ class FloatingKeyboardManager(private val context: Context) {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 (36 * density).toInt()
             )
-            setBackgroundColor(theme.keyBackgroundColor)
+            setBackgroundColor(Color.TRANSPARENT)
             gravity = Gravity.CENTER_VERTICAL
             
             // Drag handle area
@@ -143,6 +325,20 @@ class FloatingKeyboardManager(private val context: Context) {
             
             dragHandle.setOnTouchListener { _, event ->
                 handleDragTouch(event)
+            }
+            
+            // Minimize button
+            val minimizeButton = ImageButton(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    (36 * density).toInt(),
+                    (36 * density).toInt()
+                )
+                setImageResource(android.R.drawable.ic_menu_recent_history)
+                setBackgroundColor(Color.TRANSPARENT)
+                setColorFilter(theme.keyTextColor)
+                setOnClickListener {
+                    minimize()
+                }
             }
             
             // Close button
@@ -160,6 +356,7 @@ class FloatingKeyboardManager(private val context: Context) {
             }
             
             addView(dragHandle)
+            addView(minimizeButton)
             addView(closeButton)
         }
     }
@@ -278,7 +475,7 @@ class FloatingKeyboardManager(private val context: Context) {
                 marginStart = (2 * density).toInt()
                 marginEnd = (2 * density).toInt()
             }
-            setBackgroundColor(theme.keyBackgroundColor)
+            setBackgroundColor(Color.TRANSPARENT)
             setTextColor(theme.keyTextColor)
             textSize = 14f
             isAllCaps = false
@@ -369,15 +566,29 @@ class FloatingKeyboardManager(private val context: Context) {
 
         stopKeyRepeat()
         
-        try {
-            windowManager.removeView(floatingContainer)
-            floatingContainer = null
-            keyboardContainer = null
-            onKeyEventCallback = null
-            Timber.d("Floating keyboard hidden")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to hide floating keyboard")
+        // Remove minimized view if showing
+        minimizedView?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to remove minimized view")
+            }
         }
+        minimizedView = null
+        
+        // Remove full keyboard if showing
+        floatingContainer?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to hide floating keyboard")
+            }
+        }
+        floatingContainer = null
+        keyboardContainer = null
+        onKeyEventCallback = null
+        isMinimized = false
+        Timber.d("Floating keyboard hidden")
     }
 
     fun updatePosition(x: Int, y: Int) {
