@@ -36,6 +36,7 @@ class FloatingKeyboardManager(private val context: Context) {
     private var keyboardContainer: FrameLayout? = null
     private var minimizedView: FrameLayout? = null
     private var onKeyEventCallback: ((Int, Int) -> Unit)? = null
+    private var onToggleMainKeyboardCallback: (() -> Unit)? = null
     
     // State tracking
     private var isMinimized = false
@@ -96,7 +97,11 @@ class FloatingKeyboardManager(private val context: Context) {
     /**
      * Show floating keyboard with a simple key layout
      */
-    fun showFloatingKeyboard(theme: Theme, onKeyEvent: (keyCode: Int, metaState: Int) -> Unit) {
+    fun showFloatingKeyboard(
+        theme: Theme, 
+        onKeyEvent: (keyCode: Int, metaState: Int) -> Unit,
+        onToggleMainKeyboard: (() -> Unit)? = null
+    ) {
         if (!FloatingKeyboardAccessibilityService.isEnabled()) {
             Timber.w("Accessibility service not enabled, cannot show floating keyboard")
             return
@@ -108,6 +113,7 @@ class FloatingKeyboardManager(private val context: Context) {
         }
 
         onKeyEventCallback = onKeyEvent
+        onToggleMainKeyboardCallback = onToggleMainKeyboard
         currentTheme = theme
         isMinimized = false
         
@@ -355,7 +361,22 @@ class FloatingKeyboardManager(private val context: Context) {
                 }
             }
             
+            // Keyboard toggle button (show/hide main keyboard)
+            val keyboardToggleButton = ImageButton(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    (36 * density).toInt(),
+                    (36 * density).toInt()
+                )
+                setImageResource(android.R.drawable.ic_menu_edit)
+                setBackgroundColor(Color.TRANSPARENT)
+                setColorFilter(theme.keyTextColor)
+                setOnClickListener {
+                    onToggleMainKeyboardCallback?.invoke()
+                }
+            }
+            
             addView(dragHandle)
+            addView(keyboardToggleButton)
             addView(minimizeButton)
             addView(closeButton)
         }

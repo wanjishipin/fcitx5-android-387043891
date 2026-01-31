@@ -699,17 +699,28 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         
         // Create and show floating keyboard
         val theme = ThemeManager.activeTheme
-        floatingKeyboardManager?.showFloatingKeyboard(theme) { keyCode, metaState ->
-            // Send key event through accessibility service
-            Timber.w("FloatingKeyboard callback: keyCode=$keyCode, metaState=$metaState")
-            val service = FloatingKeyboardAccessibilityService.getInstance()
-            if (service != null) {
-                val result = service.sendKeyEvent(keyCode, metaState)
-                Timber.w("FloatingKeyboard sendKeyEvent result: $result")
-            } else {
-                Timber.w("FloatingKeyboard: AccessibilityService not available")
+        floatingKeyboardManager?.showFloatingKeyboard(
+            theme = theme,
+            onKeyEvent = { keyCode, metaState ->
+                // Send key event through accessibility service
+                Timber.w("FloatingKeyboard callback: keyCode=$keyCode, metaState=$metaState")
+                val service = FloatingKeyboardAccessibilityService.getInstance()
+                if (service != null) {
+                    val result = service.sendKeyEvent(keyCode, metaState)
+                    Timber.w("FloatingKeyboard sendKeyEvent result: $result")
+                } else {
+                    Timber.w("FloatingKeyboard: AccessibilityService not available")
+                }
+            },
+            onToggleMainKeyboard = {
+                // Toggle the main input keyboard visibility
+                if (isInputViewShown) {
+                    requestHideSelf(0)
+                } else {
+                    requestShowSelf(0)
+                }
             }
-        }
+        )
         
         // Hide the regular input view
         requestHideSelf(0)
