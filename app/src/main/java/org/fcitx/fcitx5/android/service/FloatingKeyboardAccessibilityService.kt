@@ -193,17 +193,36 @@ class FloatingKeyboardAccessibilityService : AccessibilityService() {
     }
     
     private fun buildKeyEventCommand(keyCode: Int, metaState: Int): String {
-        return if (metaState != 0) {
-            when {
-                (metaState and KeyEvent.META_CTRL_ON) != 0 -> {
-                    // Ctrl + key combination
-                    "input keyevent --longpress $keyCode"
-                }
-                (metaState and KeyEvent.META_SHIFT_ON) != 0 -> {
-                    "input keyevent $keyCode"
-                }
-                else -> "input keyevent $keyCode"
+        // Build modifier key combination for 'input keyevent'
+        // Format: input keyevent [--ctrl] [--shift] <keycode>
+        val modifiers = StringBuilder()
+        
+        if ((metaState and KeyEvent.META_CTRL_ON) != 0) {
+            modifiers.append("CTRL_LEFT ")
+        }
+        if ((metaState and KeyEvent.META_SHIFT_ON) != 0) {
+            modifiers.append("SHIFT_LEFT ")
+        }
+        if ((metaState and KeyEvent.META_ALT_ON) != 0) {
+            modifiers.append("ALT_LEFT ")
+        }
+        
+        return if (modifiers.isNotEmpty()) {
+            // Use key combination: press modifiers, then key, then release
+            // This simulates Ctrl+C as: CTRL_LEFT down, C down, C up, CTRL_LEFT up
+            val modList = modifiers.toString().trim().split(" ")
+            val commands = StringBuilder()
+            // Press modifier keys
+            for (mod in modList) {
+                commands.append("input keyevent --down $mod && ")
             }
+            // Press and release the main key
+            commands.append("input keyevent $keyCode")
+            // Release modifier keys in reverse order
+            for (mod in modList.reversed()) {
+                commands.append(" && input keyevent --up $mod")
+            }
+            commands.toString()
         } else {
             "input keyevent $keyCode"
         }
@@ -462,7 +481,17 @@ class FloatingKeyboardAccessibilityService : AccessibilityService() {
     fun sendText(text: String): Boolean {
         Timber.d("sendText: $text")
         
-        // Try via shell first
+        // Try Shizuku first (has shell privileges)
+        if (ShizukuShellManager.isAvailable()) {
+            val result = ShizukuShellManager.sendText(text)
+            if (result) {
+                Timber.d("Text sent via Shizuku")
+                return true
+            }
+            Timber.w("Shizuku sendText failed")
+        }
+        
+        // Try via shell (may fail without root)
         try {
             val command = "input text '${text.replace("'", "\\'")}'"
             val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))

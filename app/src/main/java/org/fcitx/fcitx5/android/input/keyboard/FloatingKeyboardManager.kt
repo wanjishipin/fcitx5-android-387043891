@@ -6,8 +6,10 @@ package org.fcitx.fcitx5.android.input.keyboard
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -18,6 +20,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import org.fcitx.fcitx5.android.data.theme.Theme
@@ -41,6 +44,15 @@ class FloatingKeyboardManager(private val context: Context) {
     // State tracking
     private var isMinimized = false
     private var currentTheme: Theme? = null
+    
+    // Modifier key states
+    private var isShiftPressed = false
+    private var isShiftLocked = false  // Caps Lock state
+    private var lastShiftClickTime = 0L
+    private val doubleClickThreshold = 300L  // ms for double-click detection
+    private var isCtrlPressed = false
+    private var shiftButton: android.widget.Button? = null
+    private var ctrlButton: android.widget.Button? = null
     
     // For drag functionality
     private var initialX: Int = 0
@@ -375,7 +387,28 @@ class FloatingKeyboardManager(private val context: Context) {
                 }
             }
             
+            // About button (opens Bilibili page)
+            val aboutButton = ImageButton(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    (36 * density).toInt(),
+                    (36 * density).toInt()
+                )
+                setImageResource(android.R.drawable.ic_menu_info_details)
+                setBackgroundColor(Color.TRANSPARENT)
+                setColorFilter(theme.keyTextColor)
+                setOnClickListener {
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://space.bilibili.com/387043891"))
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to open about page")
+                    }
+                }
+            }
+            
             addView(dragHandle)
+            addView(aboutButton)
             addView(keyboardToggleButton)
             addView(minimizeButton)
             addView(closeButton)
@@ -406,8 +439,27 @@ class FloatingKeyboardManager(private val context: Context) {
         ))
         layout.addView(row1)
         
-        // Row 2: QWERTY top row
-        val row2 = createKeyRow(theme, density, listOf(
+        // Row 2: Scrollable symbols row
+        val symbolsScrollView = createScrollableSymbolsRow(theme, density)
+        layout.addView(symbolsScrollView)
+        
+        // Row 3: Number row
+        val row3 = createKeyRow(theme, density, listOf(
+            KeyConfig("1", KeyEvent.KEYCODE_1, repeatable = true),
+            KeyConfig("2", KeyEvent.KEYCODE_2, repeatable = true),
+            KeyConfig("3", KeyEvent.KEYCODE_3, repeatable = true),
+            KeyConfig("4", KeyEvent.KEYCODE_4, repeatable = true),
+            KeyConfig("5", KeyEvent.KEYCODE_5, repeatable = true),
+            KeyConfig("6", KeyEvent.KEYCODE_6, repeatable = true),
+            KeyConfig("7", KeyEvent.KEYCODE_7, repeatable = true),
+            KeyConfig("8", KeyEvent.KEYCODE_8, repeatable = true),
+            KeyConfig("9", KeyEvent.KEYCODE_9, repeatable = true),
+            KeyConfig("0", KeyEvent.KEYCODE_0, repeatable = true),
+        ))
+        layout.addView(row3)
+        
+        // Row 4: QWERTY top row
+        val row4 = createKeyRow(theme, density, listOf(
             KeyConfig("Q", KeyEvent.KEYCODE_Q, repeatable = true),
             KeyConfig("W", KeyEvent.KEYCODE_W, repeatable = true),
             KeyConfig("E", KeyEvent.KEYCODE_E, repeatable = true),
@@ -419,10 +471,10 @@ class FloatingKeyboardManager(private val context: Context) {
             KeyConfig("O", KeyEvent.KEYCODE_O, repeatable = true),
             KeyConfig("P", KeyEvent.KEYCODE_P, repeatable = true),
         ))
-        layout.addView(row2)
+        layout.addView(row4)
         
-        // Row 3: QWERTY middle row
-        val row3 = createKeyRow(theme, density, listOf(
+        // Row 5: QWERTY middle row
+        val row5 = createKeyRow(theme, density, listOf(
             KeyConfig("A", KeyEvent.KEYCODE_A, repeatable = true),
             KeyConfig("S", KeyEvent.KEYCODE_S, repeatable = true),
             KeyConfig("D", KeyEvent.KEYCODE_D, repeatable = true),
@@ -433,10 +485,11 @@ class FloatingKeyboardManager(private val context: Context) {
             KeyConfig("K", KeyEvent.KEYCODE_K, repeatable = true),
             KeyConfig("L", KeyEvent.KEYCODE_L, repeatable = true),
         ))
-        layout.addView(row3)
+        layout.addView(row5)
         
-        // Row 4: QWERTY bottom row
-        val row4 = createKeyRow(theme, density, listOf(
+        // Row 6: QWERTY bottom row with Shift
+        val row6 = createKeyRow(theme, density, listOf(
+            KeyConfig("⇧", KeyEvent.KEYCODE_SHIFT_LEFT, isModifier = true),
             KeyConfig("Z", KeyEvent.KEYCODE_Z, repeatable = true),
             KeyConfig("X", KeyEvent.KEYCODE_X, repeatable = true),
             KeyConfig("C", KeyEvent.KEYCODE_C, repeatable = true),
@@ -446,17 +499,106 @@ class FloatingKeyboardManager(private val context: Context) {
             KeyConfig("M", KeyEvent.KEYCODE_M, repeatable = true),
             KeyConfig("⌫", KeyEvent.KEYCODE_DEL, repeatable = true),
         ))
-        layout.addView(row4)
+        layout.addView(row6)
         
-        // Row 5: Space row
-        val row5 = createKeyRow(theme, density, listOf(
-            KeyConfig("Ctrl", KeyEvent.KEYCODE_CTRL_LEFT, weight = 1f),
+        // Row 7: Space row with Ctrl
+        val row7 = createKeyRow(theme, density, listOf(
+            KeyConfig("Ctrl", KeyEvent.KEYCODE_CTRL_LEFT, weight = 1f, isModifier = true),
             KeyConfig("Space", KeyEvent.KEYCODE_SPACE, weight = 4f, repeatable = true),
             KeyConfig("Enter", KeyEvent.KEYCODE_ENTER, weight = 1.5f),
         ))
-        layout.addView(row5)
+        layout.addView(row7)
         
         return layout
+    }
+    
+    private fun createScrollableSymbolsRow(theme: Theme, density: Float): HorizontalScrollView {
+        val scrollView = HorizontalScrollView(context).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                (42 * density).toInt()
+            ).apply {
+                bottomMargin = (2 * density).toInt()
+            }
+            isHorizontalScrollBarEnabled = false
+        }
+        
+        val symbolsContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        
+        // Extended symbols list - most used first
+        val symbols = listOf(
+            // Most frequently used symbols first
+            KeyConfig(":", KeyEvent.KEYCODE_SEMICOLON, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("/", KeyEvent.KEYCODE_SLASH),
+            KeyConfig("\"", KeyEvent.KEYCODE_APOSTROPHE, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig(".", KeyEvent.KEYCODE_PERIOD),
+            KeyConfig(",", KeyEvent.KEYCODE_COMMA),
+            KeyConfig("-", KeyEvent.KEYCODE_MINUS),
+            KeyConfig("_", KeyEvent.KEYCODE_MINUS, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("=", KeyEvent.KEYCODE_EQUALS),
+            KeyConfig("+", KeyEvent.KEYCODE_EQUALS, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("'", KeyEvent.KEYCODE_APOSTROPHE),
+            KeyConfig(";", KeyEvent.KEYCODE_SEMICOLON),
+            KeyConfig("?", KeyEvent.KEYCODE_SLASH, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("!", KeyEvent.KEYCODE_1, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("@", KeyEvent.KEYCODE_2, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("#", KeyEvent.KEYCODE_3, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("$", KeyEvent.KEYCODE_4, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("%", KeyEvent.KEYCODE_5, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("^", KeyEvent.KEYCODE_6, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("&", KeyEvent.KEYCODE_7, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("*", KeyEvent.KEYCODE_8, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("(", KeyEvent.KEYCODE_9, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig(")", KeyEvent.KEYCODE_0, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("[", KeyEvent.KEYCODE_LEFT_BRACKET),
+            KeyConfig("]", KeyEvent.KEYCODE_RIGHT_BRACKET),
+            KeyConfig("{", KeyEvent.KEYCODE_LEFT_BRACKET, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("}", KeyEvent.KEYCODE_RIGHT_BRACKET, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("<", KeyEvent.KEYCODE_COMMA, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig(">", KeyEvent.KEYCODE_PERIOD, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("\\", KeyEvent.KEYCODE_BACKSLASH),
+            KeyConfig("|", KeyEvent.KEYCODE_BACKSLASH, metaState = KeyEvent.META_SHIFT_ON),
+            KeyConfig("`", KeyEvent.KEYCODE_GRAVE),
+            KeyConfig("~", KeyEvent.KEYCODE_GRAVE, metaState = KeyEvent.META_SHIFT_ON),
+        )
+        
+        val keyWidth = (36 * density).toInt()
+        for (symbol in symbols) {
+            val button = createSymbolButton(theme, density, symbol, keyWidth)
+            symbolsContainer.addView(button)
+        }
+        
+        scrollView.addView(symbolsContainer)
+        return scrollView
+    }
+    
+    @SuppressLint("ClickableViewAccessibility")
+    private fun createSymbolButton(theme: Theme, density: Float, key: KeyConfig, width: Int): android.widget.Button {
+        return android.widget.Button(context).apply {
+            text = key.label
+            layoutParams = LinearLayout.LayoutParams(width, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                marginStart = (1 * density).toInt()
+                marginEnd = (1 * density).toInt()
+            }
+            setBackgroundColor(Color.TRANSPARENT)
+            setTextColor(theme.keyTextColor)
+            textSize = 16f
+            isAllCaps = false
+            setPadding(0, 0, 0, 0)
+            
+            setOnClickListener {
+                performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                // For symbols, send the character directly via text input
+                FloatingKeyboardAccessibilityService.getInstance()?.sendText(key.label)
+                    ?: Timber.w("AccessibilityService not available for symbol input")
+            }
+        }
     }
     
     private data class KeyConfig(
@@ -464,7 +606,8 @@ class FloatingKeyboardManager(private val context: Context) {
         val keyCode: Int,
         val metaState: Int = 0,
         val weight: Float = 1f,
-        val repeatable: Boolean = false
+        val repeatable: Boolean = false,
+        val isModifier: Boolean = false
     )
     
     private fun createKeyRow(theme: Theme, density: Float, keys: List<KeyConfig>): LinearLayout {
@@ -486,7 +629,7 @@ class FloatingKeyboardManager(private val context: Context) {
     
     @SuppressLint("ClickableViewAccessibility")
     private fun createKeyButton(theme: Theme, density: Float, key: KeyConfig): android.widget.Button {
-        return android.widget.Button(context).apply {
+        val button = android.widget.Button(context).apply {
             text = key.label
             layoutParams = LinearLayout.LayoutParams(
                 0,
@@ -501,38 +644,179 @@ class FloatingKeyboardManager(private val context: Context) {
             textSize = 14f
             isAllCaps = false
             setPadding(0, 0, 0, 0)
-            
-            if (key.repeatable) {
-                // Use touch listener for repeatable keys
-                setOnTouchListener { v, event ->
-                    when (event.action) {
-                        MotionEvent.ACTION_DOWN -> {
-                            v.isPressed = true
-                            v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                            // Send first key event immediately
-                            Timber.d("Key pressed: ${key.label}, keyCode: ${key.keyCode}")
-                            onKeyEventCallback?.invoke(key.keyCode, key.metaState)
-                            // Start repeat after delay
-                            startKeyRepeat(key.keyCode, key.metaState)
-                            true
-                        }
-                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                            v.isPressed = false
-                            stopKeyRepeat()
-                            true
-                        }
-                        else -> false
-                    }
+        }
+        
+        // Track modifier buttons for visual feedback
+        if (key.isModifier) {
+            when (key.keyCode) {
+                KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> {
+                    shiftButton = button
                 }
-            } else {
-                // Use click listener for non-repeatable keys
-                setOnClickListener {
-                    Timber.d("Key clicked: ${key.label}, keyCode: ${key.keyCode}")
-                    performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                    onKeyEventCallback?.invoke(key.keyCode, key.metaState)
+                KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> {
+                    ctrlButton = button
                 }
             }
         }
+        
+        if (key.isModifier) {
+            // Modifier keys toggle state
+            button.setOnClickListener {
+                button.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                when (key.keyCode) {
+                    KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> {
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastShiftClickTime < doubleClickThreshold) {
+                            // Double click: toggle Caps Lock
+                            isShiftLocked = !isShiftLocked
+                            isShiftPressed = isShiftLocked
+                            updateShiftButtonState(shiftButton, theme)
+                            Timber.d("Shift locked: $isShiftLocked")
+                        } else {
+                            // Single click: toggle Shift (unless locked)
+                            if (isShiftLocked) {
+                                // Unlock on single click when locked
+                                isShiftLocked = false
+                                isShiftPressed = false
+                                updateShiftButtonState(shiftButton, theme)
+                                Timber.d("Shift unlocked")
+                            } else {
+                                isShiftPressed = !isShiftPressed
+                                updateShiftButtonState(shiftButton, theme)
+                                Timber.d("Shift toggled: $isShiftPressed")
+                            }
+                        }
+                        lastShiftClickTime = currentTime
+                    }
+                    KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> {
+                        isCtrlPressed = !isCtrlPressed
+                        updateModifierButtonState(ctrlButton, isCtrlPressed, theme)
+                        Timber.d("Ctrl toggled: $isCtrlPressed")
+                    }
+                }
+            }
+        } else if (key.repeatable) {
+            // Use touch listener for repeatable keys
+            button.setOnTouchListener { v, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        v.isPressed = true
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                        // Check if this is a letter key and Shift is pressed (or locked)
+                        if ((isShiftPressed || isShiftLocked) && isLetterKey(key.keyCode)) {
+                            // Send uppercase letter via text input
+                            val upperChar = key.label.uppercase()
+                            Timber.d("Sending uppercase: $upperChar")
+                            FloatingKeyboardAccessibilityService.getInstance()?.sendText(upperChar)
+                            // Only reset if not locked
+                            if (!isShiftLocked) {
+                                resetModifiersAfterKey(theme)
+                            }
+                            // Start repeat with same case
+                            if (isShiftLocked) {
+                                startKeyRepeatWithText(key.label.uppercase())
+                            } else {
+                                startKeyRepeatWithText(key.label.lowercase())
+                            }
+                        } else {
+                            // Send key event normally
+                            val metaState = getCurrentMetaState()
+                            Timber.d("Key pressed: ${key.label}, keyCode: ${key.keyCode}, metaState: $metaState")
+                            onKeyEventCallback?.invoke(key.keyCode, metaState)
+                            resetModifiersAfterKey(theme)
+                            startKeyRepeat(key.keyCode, 0)
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        v.isPressed = false
+                        stopKeyRepeat()
+                        true
+                    }
+                    else -> false
+                }
+            }
+        } else {
+            // Use click listener for non-repeatable keys
+            button.setOnClickListener {
+                button.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                // Check if this is a letter key and Shift is pressed (or locked)
+                if ((isShiftPressed || isShiftLocked) && isLetterKey(key.keyCode)) {
+                    val upperChar = key.label.uppercase()
+                    Timber.d("Sending uppercase: $upperChar")
+                    FloatingKeyboardAccessibilityService.getInstance()?.sendText(upperChar)
+                    // Only reset if not locked
+                    if (!isShiftLocked) {
+                        resetModifiersAfterKey(theme)
+                    }
+                } else {
+                    val metaState = getCurrentMetaState()
+                    Timber.d("Key clicked: ${key.label}, keyCode: ${key.keyCode}, metaState: $metaState")
+                    onKeyEventCallback?.invoke(key.keyCode, metaState)
+                    resetModifiersAfterKey(theme)
+                }
+            }
+        }
+        
+        return button
+    }
+    
+    private fun getCurrentMetaState(): Int {
+        var metaState = 0
+        if (isShiftPressed || isShiftLocked) {
+            metaState = metaState or KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
+        }
+        if (isCtrlPressed) {
+            metaState = metaState or KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        }
+        return metaState
+    }
+    
+    private fun resetModifiersAfterKey(theme: Theme) {
+        // Don't reset Shift if locked
+        if (isShiftPressed && !isShiftLocked) {
+            isShiftPressed = false
+            updateShiftButtonState(shiftButton, theme)
+        }
+        if (isCtrlPressed) {
+            isCtrlPressed = false
+            updateModifierButtonState(ctrlButton, false, theme)
+        }
+    }
+    
+    private fun updateShiftButtonState(button: android.widget.Button?, theme: Theme) {
+        button?.let {
+            when {
+                isShiftLocked -> {
+                    // Locked state: different color (e.g., green)
+                    it.setBackgroundColor(Color.argb(180, 50, 150, 50))
+                    it.text = "⇪"  // Caps Lock symbol
+                }
+                isShiftPressed -> {
+                    // Pressed state: blue
+                    it.setBackgroundColor(Color.argb(128, 100, 100, 255))
+                    it.text = "⇧"
+                }
+                else -> {
+                    // Normal state
+                    it.setBackgroundColor(Color.TRANSPARENT)
+                    it.text = "⇧"
+                }
+            }
+        }
+    }
+    
+    private fun updateModifierButtonState(button: android.widget.Button?, isActive: Boolean, theme: Theme) {
+        button?.let {
+            if (isActive) {
+                it.setBackgroundColor(Color.argb(128, 100, 100, 255))
+            } else {
+                it.setBackgroundColor(Color.TRANSPARENT)
+            }
+        }
+    }
+    
+    private fun isLetterKey(keyCode: Int): Boolean {
+        return keyCode in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z
     }
     
     private fun startKeyRepeat(keyCode: Int, metaState: Int) {
@@ -541,6 +825,18 @@ class FloatingKeyboardManager(private val context: Context) {
             override fun run() {
                 Timber.d("Key repeat: keyCode=$keyCode")
                 onKeyEventCallback?.invoke(keyCode, metaState)
+                handler.postDelayed(this, repeatInterval)
+            }
+        }
+        handler.postDelayed(repeatRunnable!!, initialRepeatDelay)
+    }
+    
+    private fun startKeyRepeatWithText(text: String) {
+        stopKeyRepeat()
+        repeatRunnable = object : Runnable {
+            override fun run() {
+                Timber.d("Text repeat: $text")
+                FloatingKeyboardAccessibilityService.getInstance()?.sendText(text)
                 handler.postDelayed(this, repeatInterval)
             }
         }
