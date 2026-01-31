@@ -415,7 +415,7 @@ class FloatingKeyboardKey(
     variant: Variant = Variant.Alternative
 ) : KeyDef(
     Appearance.Text(
-        displayText = "Float",
+        displayText = "F",
         textSize = 14f,
         percentWidth = percentWidth,
         variant = variant

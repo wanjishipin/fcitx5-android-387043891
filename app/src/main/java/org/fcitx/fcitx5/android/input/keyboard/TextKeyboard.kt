@@ -73,7 +73,8 @@ class TextKeyboard(
                 ),
                 CtrlKey(0.11f),
                 MenuKey(0.1f),
-                FloatingKeyboardKey(0.1f)
+                FloatingKeyboardKey(0.1f),
+                MinimizeKey(0.1f, KeyDef.Appearance.Variant.Alternative)
             ),
             listOf(
                 AlphabetKey("Q", "1"),
