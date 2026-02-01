@@ -32,6 +32,12 @@ import timber.log.Timber
  */
 class FloatingKeyboardManager(private val context: Context) {
 
+    companion object {
+        // Light gray with 30% opacity for visibility on any app
+        private val KEYBOARD_BG_COLOR = Color.argb(77, 200, 200, 200)  // 30% opacity light gray
+        private val TITLE_BAR_BG_COLOR = Color.argb(77, 200, 200, 200)  // 30% opacity light gray
+    }
+
     private val windowManager: WindowManager = 
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     
@@ -50,9 +56,12 @@ class FloatingKeyboardManager(private val context: Context) {
     private var isShiftLocked = false  // Caps Lock state
     private var lastShiftClickTime = 0L
     private val doubleClickThreshold = 300L  // ms for double-click detection
-    private var isCtrlPressed = false
     private var shiftButton: android.widget.Button? = null
-    private var ctrlButton: android.widget.Button? = null
+    
+    // Collapsible rows state
+    private var isKeyboardExpanded = false  // Default to collapsed
+    private var collapsibleRowsContainer: LinearLayout? = null
+    private var expandCollapseButton: ImageButton? = null
     
     // For drag functionality
     private var initialX: Int = 0
@@ -131,10 +140,10 @@ class FloatingKeyboardManager(private val context: Context) {
         
         val density = context.resources.displayMetrics.density
         
-        // Create main container with transparent background
+        // Create main container with semi-transparent background
         floatingContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(KEYBOARD_BG_COLOR)
             elevation = 8f * density
         }
         
@@ -148,7 +157,7 @@ class FloatingKeyboardManager(private val context: Context) {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(KEYBOARD_BG_COLOR)
         }
         
         // Add a simple floating keyboard layout
@@ -195,7 +204,7 @@ class FloatingKeyboardManager(private val context: Context) {
         minimizedView = FrameLayout(context).apply {
             val size = (56 * density).toInt()
             layoutParams = FrameLayout.LayoutParams(size, size)
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(TITLE_BAR_BG_COLOR)
             elevation = 8f * density
         }
         
@@ -207,7 +216,7 @@ class FloatingKeyboardManager(private val context: Context) {
             )
             setImageResource(android.R.drawable.ic_menu_recent_history)
             setBackgroundColor(Color.TRANSPARENT)
-            setColorFilter(theme.keyTextColor)
+            setColorFilter(Color.WHITE)
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             setPadding((8 * density).toInt(), (8 * density).toInt(), 
                 (8 * density).toInt(), (8 * density).toInt())
@@ -265,7 +274,7 @@ class FloatingKeyboardManager(private val context: Context) {
         
         floatingContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(KEYBOARD_BG_COLOR)
             elevation = 8f * density
         }
         
@@ -277,7 +286,7 @@ class FloatingKeyboardManager(private val context: Context) {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(KEYBOARD_BG_COLOR)
         }
         
         val keyboardLayout = createSimpleKeyboardLayout(theme, density)
@@ -328,7 +337,7 @@ class FloatingKeyboardManager(private val context: Context) {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 (36 * density).toInt()
             )
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(TITLE_BAR_BG_COLOR)
             gravity = Gravity.CENTER_VERTICAL
             
             // Drag handle area
@@ -373,17 +382,37 @@ class FloatingKeyboardManager(private val context: Context) {
                 }
             }
             
-            // Keyboard toggle button (show/hide main keyboard)
-            val keyboardToggleButton = ImageButton(context).apply {
+            // Keyboard toggle button (show/hide main keyboard) - using TextView for keyboard symbol
+            val keyboardToggleButton = android.widget.TextView(context).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     (36 * density).toInt(),
                     (36 * density).toInt()
                 )
-                setImageResource(android.R.drawable.ic_menu_edit)
+                text = "⌨"  // Keyboard Unicode symbol
+                textSize = 20f
+                setTextColor(theme.keyTextColor)
+                gravity = Gravity.CENTER
                 setBackgroundColor(Color.TRANSPARENT)
-                setColorFilter(theme.keyTextColor)
                 setOnClickListener {
                     onToggleMainKeyboardCallback?.invoke()
+                }
+            }
+            
+            // Expand/Collapse button for number and letter rows
+            expandCollapseButton = ImageButton(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    (36 * density).toInt(),
+                    (36 * density).toInt()
+                )
+                setImageResource(
+                    if (isKeyboardExpanded) android.R.drawable.arrow_up_float
+                    else android.R.drawable.arrow_down_float
+                )
+                setBackgroundColor(Color.TRANSPARENT)
+                setColorFilter(theme.keyTextColor)
+                contentDescription = "Expand/Collapse keyboard"
+                setOnClickListener {
+                    toggleKeyboardExpanded()
                 }
             }
             
@@ -408,6 +437,7 @@ class FloatingKeyboardManager(private val context: Context) {
             }
             
             addView(dragHandle)
+            addView(expandCollapseButton)
             addView(aboutButton)
             addView(keyboardToggleButton)
             addView(minimizeButton)
@@ -426,7 +456,7 @@ class FloatingKeyboardManager(private val context: Context) {
                 (4 * density).toInt(), (4 * density).toInt())
         }
         
-        // Row 1: Function keys
+        // Row 1: Function keys with Space and Enter (always visible)
         val row1 = createKeyRow(theme, density, listOf(
             KeyConfig("Esc", KeyEvent.KEYCODE_ESCAPE),
             KeyConfig("Tab", KeyEvent.KEYCODE_TAB),
@@ -435,13 +465,25 @@ class FloatingKeyboardManager(private val context: Context) {
             KeyConfig("←", KeyEvent.KEYCODE_DPAD_LEFT, repeatable = true),
             KeyConfig("→", KeyEvent.KEYCODE_DPAD_RIGHT, repeatable = true),
             KeyConfig("OK", KeyEvent.KEYCODE_DPAD_CENTER),
-            KeyConfig("Menu", KeyEvent.KEYCODE_MENU),
+            KeyConfig("M", KeyEvent.KEYCODE_MENU),  // Menu shortened
+            KeyConfig("SP", KeyEvent.KEYCODE_SPACE, weight = 1.2f, repeatable = true),  // Space shortened
+            KeyConfig("⏎", KeyEvent.KEYCODE_ENTER),  // Enter as symbol
         ))
         layout.addView(row1)
         
-        // Row 2: Scrollable symbols row
+        // Row 2: Scrollable symbols row (always visible)
         val symbolsScrollView = createScrollableSymbolsRow(theme, density)
         layout.addView(symbolsScrollView)
+        
+        // Collapsible container for number and letter rows
+        collapsibleRowsContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            visibility = if (isKeyboardExpanded) View.VISIBLE else View.GONE
+        }
         
         // Row 3: Number row
         val row3 = createKeyRow(theme, density, listOf(
@@ -456,7 +498,7 @@ class FloatingKeyboardManager(private val context: Context) {
             KeyConfig("9", KeyEvent.KEYCODE_9, repeatable = true),
             KeyConfig("0", KeyEvent.KEYCODE_0, repeatable = true),
         ))
-        layout.addView(row3)
+        collapsibleRowsContainer?.addView(row3)
         
         // Row 4: QWERTY top row
         val row4 = createKeyRow(theme, density, listOf(
@@ -471,7 +513,7 @@ class FloatingKeyboardManager(private val context: Context) {
             KeyConfig("O", KeyEvent.KEYCODE_O, repeatable = true),
             KeyConfig("P", KeyEvent.KEYCODE_P, repeatable = true),
         ))
-        layout.addView(row4)
+        collapsibleRowsContainer?.addView(row4)
         
         // Row 5: QWERTY middle row
         val row5 = createKeyRow(theme, density, listOf(
@@ -485,7 +527,7 @@ class FloatingKeyboardManager(private val context: Context) {
             KeyConfig("K", KeyEvent.KEYCODE_K, repeatable = true),
             KeyConfig("L", KeyEvent.KEYCODE_L, repeatable = true),
         ))
-        layout.addView(row5)
+        collapsibleRowsContainer?.addView(row5)
         
         // Row 6: QWERTY bottom row with Shift
         val row6 = createKeyRow(theme, density, listOf(
@@ -499,17 +541,31 @@ class FloatingKeyboardManager(private val context: Context) {
             KeyConfig("M", KeyEvent.KEYCODE_M, repeatable = true),
             KeyConfig("⌫", KeyEvent.KEYCODE_DEL, repeatable = true),
         ))
-        layout.addView(row6)
+        collapsibleRowsContainer?.addView(row6)
         
-        // Row 7: Space row with Ctrl
-        val row7 = createKeyRow(theme, density, listOf(
-            KeyConfig("Ctrl", KeyEvent.KEYCODE_CTRL_LEFT, weight = 1f, isModifier = true),
-            KeyConfig("Space", KeyEvent.KEYCODE_SPACE, weight = 4f, repeatable = true),
-            KeyConfig("Enter", KeyEvent.KEYCODE_ENTER, weight = 1.5f),
-        ))
-        layout.addView(row7)
+        layout.addView(collapsibleRowsContainer)
         
         return layout
+    }
+    
+    private fun toggleKeyboardExpanded() {
+        isKeyboardExpanded = !isKeyboardExpanded
+        collapsibleRowsContainer?.visibility = if (isKeyboardExpanded) View.VISIBLE else View.GONE
+        updateExpandCollapseButtonIcon()
+        
+        // Update window layout
+        try {
+            windowManager.updateViewLayout(floatingContainer, windowParams)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update window layout")
+        }
+    }
+    
+    private fun updateExpandCollapseButtonIcon() {
+        expandCollapseButton?.setImageResource(
+            if (isKeyboardExpanded) android.R.drawable.arrow_up_float
+            else android.R.drawable.arrow_down_float
+        )
     }
     
     private fun createScrollableSymbolsRow(theme: Theme, density: Float): HorizontalScrollView {
@@ -652,9 +708,6 @@ class FloatingKeyboardManager(private val context: Context) {
                 KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT -> {
                     shiftButton = button
                 }
-                KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> {
-                    ctrlButton = button
-                }
             }
         }
         
@@ -686,11 +739,6 @@ class FloatingKeyboardManager(private val context: Context) {
                             }
                         }
                         lastShiftClickTime = currentTime
-                    }
-                    KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> {
-                        isCtrlPressed = !isCtrlPressed
-                        updateModifierButtonState(ctrlButton, isCtrlPressed, theme)
-                        Timber.d("Ctrl toggled: $isCtrlPressed")
                     }
                 }
             }
@@ -765,9 +813,6 @@ class FloatingKeyboardManager(private val context: Context) {
         if (isShiftPressed || isShiftLocked) {
             metaState = metaState or KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
         }
-        if (isCtrlPressed) {
-            metaState = metaState or KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
-        }
         return metaState
     }
     
@@ -776,10 +821,6 @@ class FloatingKeyboardManager(private val context: Context) {
         if (isShiftPressed && !isShiftLocked) {
             isShiftPressed = false
             updateShiftButtonState(shiftButton, theme)
-        }
-        if (isCtrlPressed) {
-            isCtrlPressed = false
-            updateModifierButtonState(ctrlButton, false, theme)
         }
     }
     
@@ -805,6 +846,7 @@ class FloatingKeyboardManager(private val context: Context) {
         }
     }
     
+    @Suppress("UNUSED_PARAMETER")
     private fun updateModifierButtonState(button: android.widget.Button?, isActive: Boolean, theme: Theme) {
         button?.let {
             if (isActive) {
