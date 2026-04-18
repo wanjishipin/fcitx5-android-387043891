@@ -61,6 +61,37 @@ class AlphabetKey(
     )
 )
 
+/**
+ * Alphabet key with swipe up and swipe down support.
+ * @param character The main character displayed on the key
+ * @param swipeDownSymbol The symbol input when swiping down
+ * @param swipeUpSymbol The symbol input when swiping up
+ */
+class AlphabetKey2(
+    val character: String,
+    val swipeDownSymbol: String,
+    val swipeUpSymbol: String,
+    variant: Variant = Variant.Normal,
+    popup: Array<Popup>? = null
+) : KeyDef(
+    Appearance.AltText2(
+        displayText = character,
+        altText = swipeDownSymbol,
+        altText2 = swipeUpSymbol,
+        textSize = 23f,
+        variant = variant
+    ),
+    setOf(
+        Behavior.Press(KeyAction.FcitxKeyAction(character)),
+        Behavior.SwipeDown(KeyAction.FcitxKeyAction(swipeDownSymbol)),
+        Behavior.SwipeUp(KeyAction.FcitxKeyAction(swipeUpSymbol))
+    ),
+    popup ?: arrayOf(
+        Popup.AltPreview(character, swipeDownSymbol),
+        Popup.Keyboard(character)
+    )
+)
+
 class AlphabetDigitKey(
     val character: String,
     altText: String,

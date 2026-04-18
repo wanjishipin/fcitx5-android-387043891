@@ -5,7 +5,12 @@
 package org.fcitx.fcitx5.android.input.clipboard
 
 import android.content.Context
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
+import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.ViewAnimator
 import androidx.transition.Fade
 import androidx.transition.TransitionManager
@@ -43,6 +48,24 @@ class ClipboardUi(override val ctx: Context, private val theme: Theme) : Ui {
         add(enableUi.root, lParams(matchParent, matchParent))
     }
 
+    val searchEditText = EditText(ctx).apply {
+        hint = ctx.getString(R.string.search_clipboard)
+        setTextColor(theme.keyTextColor)
+        setHintTextColor(theme.altKeyTextColor)
+        textSize = 14f
+        layoutParams = LinearLayout.LayoutParams(matchParent, dp(36)).apply {
+            setMargins(dp(8), dp(4), dp(8), dp(4))
+        }
+        setPadding(dp(12), dp(8), dp(12), dp(8))
+        background = null
+    }
+
+    val contentContainer = view(::LinearLayout) {
+        orientation = LinearLayout.VERTICAL
+        add(searchEditText, LinearLayout.LayoutParams(matchParent, dp(44)))
+        add(viewAnimator, LinearLayout.LayoutParams(matchParent, 0, 1f))
+    }
+
     private val keyBorder by ThemeManager.prefs.keyBorder
     private val disableAnimation by AppPrefs.getInstance().advanced.disableAnimation
 
@@ -50,7 +73,7 @@ class ClipboardUi(override val ctx: Context, private val theme: Theme) : Ui {
         if (!keyBorder) {
             backgroundColor = theme.barColor
         }
-        add(viewAnimator, defaultLParams(matchParent, matchParent))
+        add(contentContainer, defaultLParams(matchParent, matchParent))
     }
 
     val deleteAllButton = ToolButton(ctx, R.drawable.ic_baseline_delete_sweep_24, theme).apply {

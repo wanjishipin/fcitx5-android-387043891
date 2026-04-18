@@ -376,6 +376,67 @@ class AltTextKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.AltText)
 }
 
 @SuppressLint("ViewConstructor")
+class AltText2KeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.AltText2) :
+    TextKeyView(ctx, theme, def) {
+    val altText = view(::AutoScaleTextView) {
+        isClickable = false
+        isFocusable = false
+        setTextSize(TypedValue.COMPLEX_UNIT_DIP, 10.666667f)
+        setTypeface(typeface, Typeface.BOLD)
+        text = def.altText
+        textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR
+        setTextColor(
+            when (def.variant) {
+                Variant.Normal, Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
+                Variant.Accent -> theme.accentKeyTextColor
+            }
+        )
+    }
+    val altText2 = view(::AutoScaleTextView) {
+        isClickable = false
+        isFocusable = false
+        setTextSize(TypedValue.COMPLEX_UNIT_DIP, 10.666667f)
+        setTypeface(typeface, Typeface.BOLD)
+        text = def.altText2
+        textDirection = View.TEXT_DIRECTION_FIRST_STRONG_LTR
+        setTextColor(
+            when (def.variant) {
+                Variant.Normal, Variant.AltForeground, Variant.Alternative -> theme.altKeyTextColor
+                Variant.Accent -> theme.accentKeyTextColor
+            }
+        )
+    }
+
+    init {
+        appearanceView.apply {
+            add(altText, lParams(wrapContent, wrapContent))
+            add(altText2, lParams(wrapContent, wrapContent))
+        }
+        applyLayout2()
+    }
+
+    private fun applyLayout2() {
+        mainText.updateLayoutParams<ConstraintLayout.LayoutParams> {
+            centerInParent()
+        }
+        // altText (swipe down symbol) - bottom right
+        altText.visibility = View.VISIBLE
+        altText.updateLayoutParams<ConstraintLayout.LayoutParams> {
+            rightToRight = parentId; rightMargin = hMargin + dp(4)
+            bottomToBottom = parentId; bottomMargin = vMargin + dp(2)
+            leftToLeft = unset; topToTop = unset
+        }
+        // altText2 (swipe up symbol) - top left
+        altText2.visibility = View.VISIBLE
+        altText2.updateLayoutParams<ConstraintLayout.LayoutParams> {
+            leftToLeft = parentId; leftMargin = hMargin + dp(4)
+            topToTop = parentId; topMargin = vMargin + dp(2)
+            rightToRight = unset; bottomToBottom = unset
+        }
+    }
+}
+
+@SuppressLint("ViewConstructor")
 class ImageKeyView(ctx: Context, theme: Theme, def: KeyDef.Appearance.Image) :
     KeyView(ctx, theme, def) {
     val img = imageView { configure(theme, def.src, def.variant) }

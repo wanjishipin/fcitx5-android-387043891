@@ -66,7 +66,7 @@ import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.input.cursor.CursorRange
 import org.fcitx.fcitx5.android.input.cursor.CursorTracker
 import org.fcitx.fcitx5.android.input.keyboard.FloatingKeyboardManager
-import org.fcitx.fcitx5.android.service.FloatingKeyboardAccessibilityService
+import org.fcitx.fcitx5.android.service.ShizukuShellManager
 import org.fcitx.fcitx5.android.utils.FloatingKeyboardPermissionHelper
 import org.fcitx.fcitx5.android.utils.InputMethodUtil
 import org.fcitx.fcitx5.android.utils.alpha
@@ -111,6 +111,9 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
     // Floating keyboard
     private var floatingKeyboardManager: FloatingKeyboardManager? = null
     private var isFloatingKeyboardActive = false
+    // Clipboard window state - when active, floating keyboard input goes to clipboard search
+    var isClipboardWindowActive = false
+    var clipboardSearchEditText: android.widget.EditText? = null
 
     private val navbarMgr = NavigationBarManager()
     private val inputDeviceMgr = InputDeviceManager { isVirtualKeyboard ->
@@ -696,20 +699,36 @@ class FcitxInputMethodService : LifecycleInputMethodService() {
         }
         
         isFloatingKeyboardActive = true
-        
+
         // Create and show floating keyboard
         val theme = ThemeManager.activeTheme
         floatingKeyboardManager?.showFloatingKeyboard(
             theme = theme,
             onKeyEvent = { keyCode, metaState ->
-                // Send key event through accessibility service
-                Timber.w("FloatingKeyboard callback: keyCode=$keyCode, metaState=$metaState")
-                val service = FloatingKeyboardAccessibilityService.getInstance()
-                if (service != null) {
-                    val result = service.sendKeyEvent(keyCode, metaState)
-                    Timber.w("FloatingKeyboard sendKeyEvent result: $result")
+                Timber.w("FloatingKeyboard key event: keyCode=$keyCode, metaState=$metaState")
+                // If clipboard window is active, handle DEL for search EditText
+                if (isClipboardWindowActive && clipboardSearchEditText != null && keyCode == android.view.KeyEvent.KEYCODE_DEL) {
+                    val et = clipboardSearchEditText!!
+                    val text = et.text
+                    if (text.isNotEmpty()) {
+                        et.setText(text.dropLast(1))
+                        et.setSelection(et.text.length)
+                    }
+                } else if (ShizukuShellManager.isAvailable()) {
+                    ShizukuShellManager.sendKeyEvent(keyCode)
                 } else {
-                    Timber.w("FloatingKeyboard: AccessibilityService not available")
+                    Timber.w("Shizuku not available for key event")
+                }
+            },
+            onTextInput = { text ->
+                Timber.w("FloatingKeyboard text input: $text")
+                // If clipboard window is active, append to its search EditText instead of sending to foreground app
+                if (isClipboardWindowActive && clipboardSearchEditText != null) {
+                    clipboardSearchEditText?.append(text)
+                } else if (ShizukuShellManager.isAvailable()) {
+                    ShizukuShellManager.sendText(text)
+                } else {
+                    Timber.w("Shizuku not available for text input")
                 }
             },
             onToggleMainKeyboard = {

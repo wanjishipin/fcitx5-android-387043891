@@ -77,37 +77,37 @@ class TextKeyboard(
                 MinimizeKey(0.1f, KeyDef.Appearance.Variant.Alternative)
             ),
             listOf(
-                AlphabetKey("Q", "1"),
-                AlphabetKey("W", "2"),
-                AlphabetKey("E", "3"),
-                AlphabetKey("R", "4"),
-                AlphabetKey("T", "5"),
-                AlphabetKey("Y", "6"),
-                AlphabetKey("U", "7"),
-                AlphabetKey("I", "8"),
-                AlphabetKey("O", "9"),
-                AlphabetKey("P", "0")
+                AlphabetKey2("Q", "1", "["),
+                AlphabetKey2("W", "2", "]"),
+                AlphabetKey2("E", "3", "{"),
+                AlphabetKey2("R", "4", "}"),
+                AlphabetKey2("T", "5", "<"),
+                AlphabetKey2("Y", "6", ">"),
+                AlphabetKey2("U", "7", "-"),
+                AlphabetKey2("I", "8", "_"),
+                AlphabetKey2("O", "9", "+"),
+                AlphabetKey2("P", "0", "=")
             ),
             listOf(
-                AlphabetKey("A", "@"),
-                AlphabetKey("S", "*"),
-                AlphabetKey("D", "+"),
-                AlphabetKey("F", "-"),
-                AlphabetKey("G", "="),
-                AlphabetKey("H", "/"),
-                AlphabetKey("J", "#"),
-                AlphabetKey("K", "("),
-                AlphabetKey("L", ")")
+                AlphabetKey2("A", "@", "$"),
+                AlphabetKey2("S", "*", "/"),
+                AlphabetKey2("D", "|", "\\"),
+                AlphabetKey2("F", "-", "~"),
+                AlphabetKey2("G", "=", "`"),
+                AlphabetKey2("H", "/", ";"),
+                AlphabetKey2("J", "#", ":"),
+                AlphabetKey2("K", "(", "'"),
+                AlphabetKey2("L", ")", "\"")
             ),
             listOf(
                 CapsKey(),
-                AlphabetKey("Z", "'"),
-                AlphabetKey("X", ":"),
-                AlphabetKey("C", "\""),
-                AlphabetKey("V", "?"),
-                AlphabetKey("B", "!"),
-                AlphabetKey("N", "~"),
-                AlphabetKey("M", "\\"),
+                AlphabetKey2("Z", "'", "?"),
+                AlphabetKey2("X", ":", "!"),
+                AlphabetKey2("C", "\"", "."),
+                AlphabetKey2("V", "?", ","),
+                AlphabetKey2("B", "!", "^"),
+                AlphabetKey2("N", "~", "&"),
+                AlphabetKey2("M", "\\", "%"),
                 BackspaceKey()
             ),
             listOf(
@@ -307,8 +307,9 @@ class TextKeyboard(
 
     private fun updateAlphabetKeys() {
         textKeys.forEach {
-            if (it.def !is KeyDef.Appearance.AltText) return
-            it.mainText.text = it.def.displayText.let { str ->
+            val appearance = it.def
+            if (appearance !is KeyDef.Appearance.AltText && appearance !is KeyDef.Appearance.AltText2) return@forEach
+            it.mainText.text = appearance.displayText.let { str ->
                 if (str.length != 1 || !str[0].isLetter()) return@forEach
                 if (keepLettersUppercase) str.uppercase() else transformAlphabet(str)
             }
@@ -317,14 +318,22 @@ class TextKeyboard(
 
     private fun updatePunctuationKeys() {
         textKeys.forEach {
-            if (it is AltTextKeyView) {
-                it.def as KeyDef.Appearance.AltText
-                it.altText.text = transformPunctuation(it.def.altText)
-            } else {
-                it.def as KeyDef.Appearance.Text
-                it.mainText.text = it.def.displayText.let { str ->
-                    if (str[0].run { isLetter() || isWhitespace() }) return@forEach
-                    transformPunctuation(str)
+            when (it) {
+                is AltTextKeyView -> {
+                    it.def as KeyDef.Appearance.AltText
+                    it.altText.text = transformPunctuation(it.def.altText)
+                }
+                is AltText2KeyView -> {
+                    it.def as KeyDef.Appearance.AltText2
+                    it.altText.text = transformPunctuation(it.def.altText)
+                    it.altText2.text = transformPunctuation(it.def.altText2)
+                }
+                else -> {
+                    it.def as KeyDef.Appearance.Text
+                    it.mainText.text = it.def.displayText.let { str ->
+                        if (str[0].run { isLetter() || isWhitespace() }) return@forEach
+                        transformPunctuation(str)
+                    }
                 }
             }
         }

@@ -147,6 +147,7 @@ abstract class BaseKeyboard(
     private fun createKeyView(def: KeyDef): KeyView {
         return when (def.appearance) {
             is KeyDef.Appearance.AltText -> AltTextKeyView(context, theme, def.appearance)
+            is KeyDef.Appearance.AltText2 -> AltText2KeyView(context, theme, def.appearance)
             is KeyDef.Appearance.ImageText -> ImageTextKeyView(context, theme, def.appearance)
             is KeyDef.Appearance.Text -> TextKeyView(context, theme, def.appearance)
             is KeyDef.Appearance.Image -> ImageKeyView(context, theme, def.appearance)
@@ -234,6 +235,46 @@ abstract class BaseKeyboard(
                             when (event.type) {
                                 GestureType.Up -> {
                                     if (!event.consumed && swipeSymbolDirection.checkY(event.totalY)) {
+                                        onAction(it.action)
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                else -> false
+                            } || oldOnGestureListener.onGesture(view, event)
+                        }
+                    }
+                    is KeyDef.Behavior.SwipeUp -> {
+                        swipeEnabled = true
+                        swipeThresholdX = disabledSwipeThreshold
+                        swipeThresholdY = inputSwipeThreshold
+                        val oldOnGestureListener = onGestureListener ?: OnGestureListener.Empty
+                        onGestureListener = OnGestureListener { view, event ->
+                            when (event.type) {
+                                GestureType.Up -> {
+                                    // Swipe up: totalY < 0
+                                    if (!event.consumed && event.totalY < 0) {
+                                        onAction(it.action)
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                else -> false
+                            } || oldOnGestureListener.onGesture(view, event)
+                        }
+                    }
+                    is KeyDef.Behavior.SwipeDown -> {
+                        swipeEnabled = true
+                        swipeThresholdX = disabledSwipeThreshold
+                        swipeThresholdY = inputSwipeThreshold
+                        val oldOnGestureListener = onGestureListener ?: OnGestureListener.Empty
+                        onGestureListener = OnGestureListener { view, event ->
+                            when (event.type) {
+                                GestureType.Up -> {
+                                    // Swipe down: totalY > 0
+                                    if (!event.consumed && event.totalY > 0) {
                                         onAction(it.action)
                                         true
                                     } else {

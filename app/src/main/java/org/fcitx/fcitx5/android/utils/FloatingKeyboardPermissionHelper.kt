@@ -9,7 +9,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import org.fcitx.fcitx5.android.service.FloatingKeyboardAccessibilityService
 
 /**
  * Helper class for checking and requesting floating keyboard permissions
@@ -42,25 +41,21 @@ object FloatingKeyboardPermissionHelper {
     }
 
     /**
-     * Check if accessibility service is enabled
+     * Accessibility permission is no longer required (using Shizuku instead)
      */
-    fun hasAccessibilityPermission(): Boolean {
-        return FloatingKeyboardAccessibilityService.isEnabled()
-    }
+    fun hasAccessibilityPermission(): Boolean = true
 
     /**
-     * Request accessibility permission
+     * Request accessibility permission (no longer needed)
      */
     fun requestAccessibilityPermission(context: Context) {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+        // No-op: accessibility permission is not required
     }
 
     /**
      * Check if all required permissions are granted
      */
     fun hasAllPermissions(context: Context): Boolean {
-        return hasOverlayPermission(context) && hasAccessibilityPermission()
+        return hasOverlayPermission(context)
     }
 }

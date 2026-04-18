@@ -12,15 +12,16 @@ object Versions {
     const val minSdk = 23
     const val targetSdk = 35
 
-    const val defaultCMake = "3.31.6"
-    const val defaultNDK = "28.0.13004108"
-    const val defaultBuildTools = "35.0.1"
+    const val defaultCMake = "3.30.5"
+    const val defaultNDK = "27.1.12297006"
+    const val defaultBuildTools = "35.0.0"
 
     // NOTE: increase this value to bump version code
     const val baseVersionCode = 10
     const val baseVersionName = "0.1.2"
 
-    val supportedABIs = setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+    // val supportedABIs = setOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+    val supportedABIs = setOf( "arm64-v8a")
     const val fallbackABI = "arm64-v8a"
 
     fun calculateVersionCode(abi: String = fallbackABI): Int {

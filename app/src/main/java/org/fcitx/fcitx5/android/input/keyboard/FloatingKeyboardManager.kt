@@ -24,7 +24,6 @@ import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import org.fcitx.fcitx5.android.data.theme.Theme
-import org.fcitx.fcitx5.android.service.FloatingKeyboardAccessibilityService
 import timber.log.Timber
 
 /**
@@ -38,13 +37,14 @@ class FloatingKeyboardManager(private val context: Context) {
         private val TITLE_BAR_BG_COLOR = Color.argb(77, 200, 200, 200)  // 30% opacity light gray
     }
 
-    private val windowManager: WindowManager = 
+    private val windowManager: WindowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    
+
     private var floatingContainer: LinearLayout? = null
     private var keyboardContainer: FrameLayout? = null
     private var minimizedView: FrameLayout? = null
     private var onKeyEventCallback: ((Int, Int) -> Unit)? = null
+    private var onTextInputCallback: ((String) -> Unit)? = null
     private var onToggleMainKeyboardCallback: (() -> Unit)? = null
     
     // State tracking
@@ -119,21 +119,18 @@ class FloatingKeyboardManager(private val context: Context) {
      * Show floating keyboard with a simple key layout
      */
     fun showFloatingKeyboard(
-        theme: Theme, 
+        theme: Theme,
         onKeyEvent: (keyCode: Int, metaState: Int) -> Unit,
+        onTextInput: (String) -> Unit = {},
         onToggleMainKeyboard: (() -> Unit)? = null
     ) {
-        if (!FloatingKeyboardAccessibilityService.isEnabled()) {
-            Timber.w("Accessibility service not enabled, cannot show floating keyboard")
-            return
-        }
-
         if (isShowing()) {
             Timber.d("Floating keyboard already showing")
             return
         }
 
         onKeyEventCallback = onKeyEvent
+        onTextInputCallback = onTextInput
         onToggleMainKeyboardCallback = onToggleMainKeyboard
         currentTheme = theme
         isMinimized = false
@@ -647,12 +644,26 @@ class FloatingKeyboardManager(private val context: Context) {
             textSize = 16f
             isAllCaps = false
             setPadding(0, 0, 0, 0)
-            
-            setOnClickListener {
-                performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                // For symbols, send the character directly via text input
-                FloatingKeyboardAccessibilityService.getInstance()?.sendText(key.label)
-                    ?: Timber.w("AccessibilityService not available for symbol input")
+
+            setOnTouchListener { v, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        v.isPressed = true
+                        v.setBackgroundColor(Color.argb(128, 200, 200, 200))
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        v.isPressed = false
+                        v.setBackgroundColor(Color.TRANSPARENT)
+                        if (event.action == MotionEvent.ACTION_UP) {
+                            onTextInputCallback?.invoke(key.label)
+                            Timber.d("Symbol key tapped: ${key.label}")
+                        }
+                        true
+                    }
+                    else -> false
+                }
             }
         }
     }
@@ -749,24 +760,27 @@ class FloatingKeyboardManager(private val context: Context) {
                     MotionEvent.ACTION_DOWN -> {
                         v.isPressed = true
                         v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                        // Check if this is a letter key and Shift is pressed (or locked)
-                        if ((isShiftPressed || isShiftLocked) && isLetterKey(key.keyCode)) {
-                            // Send uppercase letter via text input
-                            val upperChar = key.label.uppercase()
-                            Timber.d("Sending uppercase: $upperChar")
-                            FloatingKeyboardAccessibilityService.getInstance()?.sendText(upperChar)
-                            // Only reset if not locked
+                        if (isCharacterKey(key.keyCode)) {
+                            // For character keys (letters, numbers), send as text input
+                            val charToSend = if (isShiftPressed || isShiftLocked) {
+                                key.label.uppercase()
+                            } else {
+                                key.label.lowercase()
+                            }
+                            Timber.d("Sending character: $charToSend")
+                            onTextInputCallback?.invoke(charToSend)
+                            // Only reset shift if not locked
                             if (!isShiftLocked) {
                                 resetModifiersAfterKey(theme)
                             }
-                            // Start repeat with same case
+                            // Start repeat for character
                             if (isShiftLocked) {
                                 startKeyRepeatWithText(key.label.uppercase())
                             } else {
                                 startKeyRepeatWithText(key.label.lowercase())
                             }
                         } else {
-                            // Send key event normally
+                            // For function keys, send key event
                             val metaState = getCurrentMetaState()
                             Timber.d("Key pressed: ${key.label}, keyCode: ${key.keyCode}, metaState: $metaState")
                             onKeyEventCallback?.invoke(key.keyCode, metaState)
@@ -787,16 +801,21 @@ class FloatingKeyboardManager(private val context: Context) {
             // Use click listener for non-repeatable keys
             button.setOnClickListener {
                 button.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                // Check if this is a letter key and Shift is pressed (or locked)
-                if ((isShiftPressed || isShiftLocked) && isLetterKey(key.keyCode)) {
-                    val upperChar = key.label.uppercase()
-                    Timber.d("Sending uppercase: $upperChar")
-                    FloatingKeyboardAccessibilityService.getInstance()?.sendText(upperChar)
-                    // Only reset if not locked
+                // For character keys, send as text input
+                if (isCharacterKey(key.keyCode)) {
+                    val charToSend = if (isShiftPressed || isShiftLocked) {
+                        key.label.uppercase()
+                    } else {
+                        key.label.lowercase()
+                    }
+                    Timber.d("Sending character: $charToSend")
+                    onTextInputCallback?.invoke(charToSend)
+                    // Only reset shift if not locked
                     if (!isShiftLocked) {
                         resetModifiersAfterKey(theme)
                     }
                 } else {
+                    // For function keys, send key event
                     val metaState = getCurrentMetaState()
                     Timber.d("Key clicked: ${key.label}, keyCode: ${key.keyCode}, metaState: $metaState")
                     onKeyEventCallback?.invoke(key.keyCode, metaState)
@@ -856,11 +875,40 @@ class FloatingKeyboardManager(private val context: Context) {
             }
         }
     }
-    
+
     private fun isLetterKey(keyCode: Int): Boolean {
         return keyCode in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z
     }
-    
+
+    /**
+     * Check if a key is a character key that can be sent as text input.
+     * This includes letters, numbers, and printable symbols.
+     * Note: Space and Enter cannot be sent via "input text", so they use key events instead.
+     */
+    private fun isCharacterKey(keyCode: Int): Boolean {
+        return when (keyCode) {
+            // Numbers
+            KeyEvent.KEYCODE_0, KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_2, KeyEvent.KEYCODE_3,
+            KeyEvent.KEYCODE_4, KeyEvent.KEYCODE_5, KeyEvent.KEYCODE_6, KeyEvent.KEYCODE_7,
+            KeyEvent.KEYCODE_8, KeyEvent.KEYCODE_9,
+            // Letters
+            KeyEvent.KEYCODE_A, KeyEvent.KEYCODE_B, KeyEvent.KEYCODE_C, KeyEvent.KEYCODE_D,
+            KeyEvent.KEYCODE_E, KeyEvent.KEYCODE_F, KeyEvent.KEYCODE_G, KeyEvent.KEYCODE_H,
+            KeyEvent.KEYCODE_I, KeyEvent.KEYCODE_J, KeyEvent.KEYCODE_K, KeyEvent.KEYCODE_L,
+            KeyEvent.KEYCODE_M, KeyEvent.KEYCODE_N, KeyEvent.KEYCODE_O, KeyEvent.KEYCODE_P,
+            KeyEvent.KEYCODE_Q, KeyEvent.KEYCODE_R, KeyEvent.KEYCODE_S, KeyEvent.KEYCODE_T,
+            KeyEvent.KEYCODE_U, KeyEvent.KEYCODE_V, KeyEvent.KEYCODE_W, KeyEvent.KEYCODE_X,
+            KeyEvent.KEYCODE_Y, KeyEvent.KEYCODE_Z,
+            // Punctuation and symbols (for the symbol row)
+            KeyEvent.KEYCODE_COMMA, KeyEvent.KEYCODE_PERIOD, KeyEvent.KEYCODE_MINUS,
+            KeyEvent.KEYCODE_EQUALS, KeyEvent.KEYCODE_LEFT_BRACKET, KeyEvent.KEYCODE_RIGHT_BRACKET,
+            KeyEvent.KEYCODE_BACKSLASH, KeyEvent.KEYCODE_SEMICOLON, KeyEvent.KEYCODE_APOSTROPHE,
+            KeyEvent.KEYCODE_SLASH, KeyEvent.KEYCODE_GRAVE
+            -> true
+            else -> false
+        }
+    }
+
     private fun startKeyRepeat(keyCode: Int, metaState: Int) {
         stopKeyRepeat()
         repeatRunnable = object : Runnable {
@@ -878,7 +926,7 @@ class FloatingKeyboardManager(private val context: Context) {
         repeatRunnable = object : Runnable {
             override fun run() {
                 Timber.d("Text repeat: $text")
-                FloatingKeyboardAccessibilityService.getInstance()?.sendText(text)
+                onTextInputCallback?.invoke(text)
                 handler.postDelayed(this, repeatInterval)
             }
         }

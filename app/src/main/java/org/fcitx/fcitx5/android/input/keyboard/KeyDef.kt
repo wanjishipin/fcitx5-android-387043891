@@ -61,6 +61,25 @@ open class KeyDef(
             viewId: Int = -1,
         ) : Text(displayText, textSize, textStyle, percentWidth, variant, border, margin, viewId)
 
+        /**
+         * AltText with two alternative texts: one for swipe up and one for swipe down.
+         * @param displayText The main character displayed on the key
+         * @param altText The alternative text (swipe down symbol)
+         * @param altText2 The second alternative text (swipe up symbol)
+         */
+        class AltText2(
+            displayText: String,
+            val altText: String,
+            val altText2: String,
+            textSize: Float,
+            textStyle: Int = Typeface.NORMAL,
+            percentWidth: Float = 0.1f,
+            variant: Variant = Variant.Normal,
+            border: Border = Border.Default,
+            margin: Boolean = true,
+            viewId: Int = -1,
+        ) : Text(displayText, textSize, textStyle, percentWidth, variant, border, margin, viewId)
+
         class Image(
             @DrawableRes
             val src: Int,
@@ -104,6 +123,20 @@ open class KeyDef(
         ) : Behavior()
 
         class Swipe(
+            val action: KeyAction
+        ) : Behavior()
+
+        /**
+         * Swipe up to trigger action (respects swipeSymbolDirection preference)
+         */
+        class SwipeUp(
+            val action: KeyAction
+        ) : Behavior()
+
+        /**
+         * Swipe down to trigger action (respects swipeSymbolDirection preference)
+         */
+        class SwipeDown(
             val action: KeyAction
         ) : Behavior()
 

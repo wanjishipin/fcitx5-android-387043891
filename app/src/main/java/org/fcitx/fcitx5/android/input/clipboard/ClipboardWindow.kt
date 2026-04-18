@@ -6,6 +6,8 @@ package org.fcitx.fcitx5.android.input.clipboard
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -81,10 +83,31 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
 
     private val clipboardEntryRadius by ThemeManager.prefs.clipboardEntryRadius
 
-    private val clipboardEntriesPager by lazy {
-        Pager(PagingConfig(pageSize = 16)) { ClipboardManager.allEntries() }
-    }
+    private var clipboardEntriesPager = Pager(PagingConfig(pageSize = 16)) { ClipboardManager.allEntries() }
     private var adapterSubmitJob: Job? = null
+    private var searchJob: Job? = null
+
+    private val searchTextWatcher = object : TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        override fun afterTextChanged(s: Editable?) {
+            searchJob?.cancel()
+            searchJob = service.lifecycleScope.launch {
+                val query = s?.toString()?.trim() ?: ""
+                if (query.isEmpty()) {
+                    clipboardEntriesPager = Pager(PagingConfig(pageSize = 16)) { ClipboardManager.allEntries() }
+                } else {
+                    clipboardEntriesPager = Pager(PagingConfig(pageSize = 16)) { ClipboardManager.searchEntries(query) }
+                }
+                adapterSubmitJob?.cancel()
+                adapterSubmitJob = service.lifecycleScope.launch {
+                    clipboardEntriesPager.flow.collect {
+                        adapter.submitData(it)
+                    }
+                }
+            }
+        }
+    }
 
     private val adapter: ClipboardAdapter by lazy {
         object : ClipboardAdapter(
@@ -128,6 +151,8 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
             }
         }
     }
+
+    val searchEditText get() = ui.searchEditText
 
     private val ui by lazy {
         ClipboardUi(context, theme).apply {
@@ -251,6 +276,9 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
     }
 
     override fun onAttached() {
+        // Notify service that clipboard window is active, for floating keyboard input routing
+        service.isClipboardWindowActive = true
+        service.clipboardSearchEditText = ui.searchEditText
         val isEmpty = ClipboardManager.itemCount == 0
         val isListening = clipboardEnabledPref.getValue()
         val initialState = when {
@@ -273,12 +301,17 @@ class ClipboardWindow : InputWindow.ExtendedInputWindow<ClipboardWindow>() {
             }
         }
         clipboardEnabledPref.registerOnChangeListener(clipboardEnabledListener)
+        ui.searchEditText.addTextChangedListener(searchTextWatcher)
     }
 
     override fun onDetached() {
+        service.isClipboardWindowActive = false
+        service.clipboardSearchEditText = null
         clipboardEnabledPref.unregisterOnChangeListener(clipboardEnabledListener)
         adapter.onDetached()
         adapterSubmitJob?.cancel()
+        searchJob?.cancel()
+        ui.searchEditText.removeTextChangedListener(searchTextWatcher)
         promptMenu?.dismiss()
         snackbarInstance?.dismiss()
     }

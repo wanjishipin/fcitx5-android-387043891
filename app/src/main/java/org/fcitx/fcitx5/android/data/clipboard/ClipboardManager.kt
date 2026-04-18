@@ -7,8 +7,10 @@ package org.fcitx.fcitx5.android.data.clipboard
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
+import android.os.Environment
 import androidx.annotation.Keep
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import androidx.room.withTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +33,7 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
     CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.Default) {
     private lateinit var clbDb: ClipboardDatabase
     private lateinit var clbDao: ClipboardDao
+    private lateinit var clipboardTextFile: java.io.File
 
     fun interface OnClipboardUpdateListener {
         fun onUpdate(entry: ClipboardEntry)
@@ -85,17 +88,110 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
     }
 
     fun init(context: Context) {
+        // Store database and text file in external storage: /storage/emulated/0/Documents/FcitxClipboard/
+        // This directory survives app uninstall and is accessible by shell
+        // For Android 11+ (API 30+), MANAGE_EXTERNAL_STORAGE permission is needed
+        var dbPath: String = "clbdb"
+        try {
+            val externalDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+            val clipboardDir = java.io.File(externalDir, "FcitxClipboard")
+            Timber.d("Checking external clipboard dir: ${clipboardDir.absolutePath}")
+            if (clipboardDir.exists() || clipboardDir.mkdirs()) {
+                dbPath = java.io.File(clipboardDir, "clbdb").absolutePath
+                clipboardTextFile = java.io.File(clipboardDir, "clipboard.txt")
+                Timber.d("Using external storage: ${clipboardDir.absolutePath}")
+            } else {
+                Timber.w("Failed to create external clipboard directory, using internal storage")
+                dbPath = "clbdb"
+                clipboardTextFile = java.io.File(context.filesDir, "clipboard.txt")
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "External storage not available, using internal storage")
+            dbPath = "clbdb"
+            clipboardTextFile = java.io.File(context.filesDir, "clipboard.txt")
+        }
+
+        Timber.d("Clipboard database path: $dbPath")
+        Timber.d("Clipboard text file: ${clipboardTextFile.absolutePath}")
+
         clbDb = Room
-            .databaseBuilder(context, ClipboardDatabase::class.java, "clbdb")
+            .databaseBuilder(context, ClipboardDatabase::class.java, dbPath)
             // allow wipe the database instead of crashing when downgrade
             .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
+            // use TRUNCATE journal mode for reliable backup (single file instead of wal+shm)
+            .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
             .build()
         clbDao = clbDb.clipboardDao()
+        Timber.d("Clipboard database initialized, clip listening enabled: ${enabledPref.getValue()}")
         enabledListener.onChange(enabledPref.key, enabledPref.getValue())
         enabledPref.registerOnChangeListener(enabledListener)
         limitListener.onChange(limitPref.key, limitPref.getValue())
         limitPref.registerOnChangeListener(limitListener)
-        launch { updateItemCount() }
+        launch {
+            updateItemCount()
+            // Try to restore from text file if database is empty
+            restoreFromTextFileIfNeeded()
+            syncToTextFile()
+        }
+    }
+
+    /**
+     * Restore clipboard entries from text file if database is empty but text file exists
+     */
+    private suspend fun restoreFromTextFileIfNeeded() {
+        try {
+            val currentCount = clbDao.itemCount()
+            if (currentCount > 0) {
+                Timber.d("Database has $currentCount entries, no need to restore")
+                return
+            }
+
+            if (!clipboardTextFile.exists()) {
+                Timber.d("No text file to restore from")
+                return
+            }
+
+            val text = clipboardTextFile.readText()
+            if (text.isBlank()) {
+                Timber.d("Text file is empty")
+                return
+            }
+
+            val lines = text.split("\n").filter { it.isNotBlank() }
+            if (lines.isEmpty()) {
+                Timber.d("No content in text file to restore")
+                return
+            }
+
+            Timber.d("Restoring ${lines.size} entries from text file")
+            clbDb.withTransaction {
+                for (line in lines) {
+                    val entry = ClipboardEntry(
+                        text = line,
+                        timestamp = System.currentTimeMillis()
+                    )
+                    clbDao.insert(entry)
+                }
+            }
+            updateItemCount()
+            Timber.d("Successfully restored clipboard from text file")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to restore from text file")
+        }
+    }
+
+    /**
+     * Sync all clipboard entries to a plain text file for shell access
+     */
+    private suspend fun syncToTextFile() {
+        try {
+            val entries = clbDao.getAllUnpinned()
+            val text = entries.joinToString("\n") { it.text }
+            clipboardTextFile.writeText(text)
+            Timber.d("Synced ${entries.size} clipboard entries to ${clipboardTextFile.absolutePath}")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to sync clipboard to text file")
+        }
     }
 
     suspend fun get(id: Int) = clbDao.get(id)
@@ -103,6 +199,8 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
     suspend fun haveUnpinned() = clbDao.haveUnpinned()
 
     fun allEntries() = clbDao.allEntries()
+
+    fun searchEntries(query: String) = clbDao.searchEntries(query)
 
     suspend fun pin(id: Int) = clbDao.updatePinStatus(id, true)
 
@@ -185,6 +283,7 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
                     }
                     updateLastEntry(insertedEntry)
                     updateItemCount()
+                    syncToTextFile()
                 } catch (exception: Exception) {
                     Timber.w("Failed to update clipboard database: $exception")
                     updateLastEntry(entry)
