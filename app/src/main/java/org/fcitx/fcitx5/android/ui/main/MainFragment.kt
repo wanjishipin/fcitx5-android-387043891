@@ -4,6 +4,8 @@
  */
 package org.fcitx.fcitx5.android.ui.main
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
@@ -95,6 +97,12 @@ class MainFragment : PaddingPreferenceFragment() {
                     R.drawable.ic_baseline_more_horiz_24,
                     SettingsRoute.Advanced
                 )
+                addPreference("关注玩机视频") {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://space.bilibili.com/387043891")))
+                }
+                addPreference("视频演示及反馈") {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://mp.weixin.qq.com/s/v6BTpYUFnGrfbrrZ4CA8ag")))
+                }
             }
         }
     }

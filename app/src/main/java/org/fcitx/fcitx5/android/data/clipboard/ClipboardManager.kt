@@ -6,8 +6,11 @@ package org.fcitx.fcitx5.android.data.clipboard
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.Settings
 import androidx.annotation.Keep
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -45,6 +48,35 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
 
     var itemCount: Int = 0
         private set
+
+    /**
+     * Check if MANAGE_EXTERNAL_STORAGE permission is granted
+     */
+    fun hasStoragePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            true
+        }
+    }
+
+    /**
+     * Request MANAGE_EXTERNAL_STORAGE permission
+     */
+    fun requestStoragePermission(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = Uri.parse("package:${context.packageName}")
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            }
+        }
+    }
 
     private suspend fun updateItemCount() {
         itemCount = clbDao.itemCount()
@@ -92,6 +124,7 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
         // This directory survives app uninstall and is accessible by shell
         // For Android 11+ (API 30+), MANAGE_EXTERNAL_STORAGE permission is needed
         var dbPath: String = "clbdb"
+        var useExternalStorage = false
         try {
             val externalDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
             val clipboardDir = java.io.File(externalDir, "FcitxClipboard")
@@ -99,7 +132,15 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
             if (clipboardDir.exists() || clipboardDir.mkdirs()) {
                 dbPath = java.io.File(clipboardDir, "clbdb").absolutePath
                 clipboardTextFile = java.io.File(clipboardDir, "clipboard.txt")
-                Timber.d("Using external storage: ${clipboardDir.absolutePath}")
+                // Only use external storage if we have the permission
+                if (hasStoragePermission()) {
+                    useExternalStorage = true
+                    Timber.d("Using external storage: ${clipboardDir.absolutePath}")
+                } else {
+                    Timber.w("MANAGE_EXTERNAL_STORAGE permission not granted, using internal storage")
+                    dbPath = "clbdb"
+                    clipboardTextFile = java.io.File(context.filesDir, "clipboard.txt")
+                }
             } else {
                 Timber.w("Failed to create external clipboard directory, using internal storage")
                 dbPath = "clbdb"
@@ -111,7 +152,7 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
             clipboardTextFile = java.io.File(context.filesDir, "clipboard.txt")
         }
 
-        Timber.d("Clipboard database path: $dbPath")
+        Timber.d("Clipboard database path: $dbPath, useExternalStorage=$useExternalStorage")
         Timber.d("Clipboard text file: ${clipboardTextFile.absolutePath}")
 
         clbDb = Room
@@ -141,23 +182,26 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
     private suspend fun restoreFromTextFileIfNeeded() {
         try {
             val currentCount = clbDao.itemCount()
+            Timber.d("restoreFromTextFileIfNeeded: currentCount=$currentCount, clipboardTextFile=${clipboardTextFile.absolutePath}")
             if (currentCount > 0) {
                 Timber.d("Database has $currentCount entries, no need to restore")
                 return
             }
 
             if (!clipboardTextFile.exists()) {
-                Timber.d("No text file to restore from")
+                Timber.d("No text file to restore from at ${clipboardTextFile.absolutePath}")
                 return
             }
 
             val text = clipboardTextFile.readText()
+            Timber.d("Text file content length: ${text.length}")
             if (text.isBlank()) {
                 Timber.d("Text file is empty")
                 return
             }
 
             val lines = text.split("\n").filter { it.isNotBlank() }
+            Timber.d("Found ${lines.size} lines in text file")
             if (lines.isEmpty()) {
                 Timber.d("No content in text file to restore")
                 return
@@ -191,6 +235,114 @@ object ClipboardManager : ClipboardManager.OnPrimaryClipChangedListener,
             Timber.d("Synced ${entries.size} clipboard entries to ${clipboardTextFile.absolutePath}")
         } catch (e: Exception) {
             Timber.e(e, "Failed to sync clipboard to text file")
+        }
+    }
+
+    /**
+     * Manually restore clipboard from external storage
+     * Restores from clbdb database first, then falls back to clipboard.txt
+     */
+    suspend fun restoreFromExternalStorage() {
+        try {
+            val externalDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+            val clipboardDir = java.io.File(externalDir, "FcitxClipboard")
+            val dbFile = java.io.File(clipboardDir, "clbdb")
+            val textFile = java.io.File(clipboardDir, "clipboard.txt")
+
+            Timber.d("restoreFromExternalStorage: db exists=${dbFile.exists()}, txt exists=${textFile.exists()}")
+
+            // First try to restore from clbdb database if it exists
+            if (dbFile.exists()) {
+                try {
+                    // Open the external database as read-only and migrate entries
+                    val externalDb = Room.databaseBuilder(
+                        appContext,
+                        ClipboardDatabase::class.java,
+                        dbFile.absolutePath
+                    )
+                        .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                        .build()
+                    val externalDao = externalDb.clipboardDao()
+                    val externalCount = externalDao.itemCount()
+                    Timber.d("External clbdb has $externalCount entries")
+
+                    val currentCount = clbDao.itemCount()
+                    Timber.d("Current database has $currentCount entries")
+
+                    if (externalCount > currentCount) {
+                        // Get all entries from external db
+                        val entries = externalDao.getAllUnpinned()
+                        Timber.d("Restoring ${entries.size} entries from external clbdb")
+                        clbDb.withTransaction {
+                            for (entry in entries) {
+                                // Check if this text already exists in current db
+                                val existing = clbDao.find(entry.text, entry.sensitive)
+                                if (existing == null) {
+                                    val newEntry = entry.copy(id = 0) // Reset id for new insert
+                                    clbDao.insert(newEntry)
+                                }
+                            }
+                        }
+                        updateItemCount()
+                        Timber.d("Successfully restored clipboard from external clbdb")
+                        externalDb.close()
+                        return
+                    } else {
+                        externalDb.close()
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to restore from external clbdb")
+                }
+            }
+
+            // Fall back to clipboard.txt
+            if (textFile.exists()) {
+                restoreFromTextFileManually()
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to restore from external storage")
+        }
+    }
+
+    /**
+     * Manually restore clipboard from external storage text file
+     * Called when user clicks "Load from SD card" button
+     */
+    private suspend fun restoreFromTextFileManually() {
+        try {
+            val externalDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+            val clipboardDir = java.io.File(externalDir, "FcitxClipboard")
+            val textFile = java.io.File(clipboardDir, "clipboard.txt")
+            Timber.d("restoreFromTextFileManually: path=${textFile.absolutePath}, exists=${textFile.exists()}")
+
+            if (!textFile.exists()) {
+                Timber.d("No text file to restore from at ${textFile.absolutePath}")
+                return
+            }
+
+            val text = textFile.readText()
+            Timber.d("Text file content length: ${text.length}")
+            if (text.isBlank()) {
+                Timber.d("Text file is empty")
+                return
+            }
+
+            val lines = text.split("\n").filter { it.isNotBlank() }
+            Timber.d("Found ${lines.size} lines in text file")
+
+            clbDb.withTransaction {
+                for (line in lines) {
+                    val entry = ClipboardEntry(
+                        text = line,
+                        timestamp = System.currentTimeMillis()
+                    )
+                    clbDao.insert(entry)
+                }
+            }
+            updateItemCount()
+            Timber.d("Successfully restored clipboard from text file manually")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to restore from text file manually")
         }
     }
 

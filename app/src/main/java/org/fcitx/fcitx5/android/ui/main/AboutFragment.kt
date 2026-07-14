@@ -33,6 +33,12 @@ class AboutFragment : PaddingPreferenceFragment() {
             addPreference(R.string.source_code, R.string.github_repo) {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Const.githubRepo)))
             }
+            addPreference("反馈", "问题反馈与建议") {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://mp.weixin.qq.com/s/v6BTpYUFnGrfbrrZ4CA8ag")))
+            }
+            addPreference("关注玩机视频", "B站玩机视频") {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://space.bilibili.com/387043891")))
+            }
             addPreference(R.string.license, Const.licenseSpdxId) {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Const.licenseUrl)))
             }

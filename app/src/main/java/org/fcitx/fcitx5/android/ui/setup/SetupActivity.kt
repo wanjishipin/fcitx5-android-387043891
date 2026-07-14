@@ -18,6 +18,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.os.bundleOf
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import org.fcitx.fcitx5.android.FcitxApplication
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.adapter.FragmentStateAdapter
@@ -58,9 +59,13 @@ class SetupActivity : FragmentActivity() {
         }
         nextButton = binding.nextButton.apply {
             setOnClickListener {
-                if (viewPager.currentItem != SetupPage.entries.size - 1)
+                if (viewPager.currentItem != SetupPage.entries.size - 1) {
                     viewPager.currentItem = viewPager.currentItem + 1
-                else finish()
+                } else {
+                    // Force restart app when setup is complete
+                    finish()
+                    FcitxApplication.restartApp()
+                }
             }
         }
         viewPager = binding.viewpager.apply {

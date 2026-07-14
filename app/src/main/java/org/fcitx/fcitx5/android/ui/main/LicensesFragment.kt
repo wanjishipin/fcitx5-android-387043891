@@ -12,6 +12,7 @@ import androidx.lifecycle.lifecycleScope
 import com.mikepenz.aboutlibraries.Libs
 import com.mikepenz.aboutlibraries.entity.License
 import kotlinx.coroutines.launch
+import org.fcitx.fcitx5.android.BuildConfig
 import org.fcitx.fcitx5.android.R
 import org.fcitx.fcitx5.android.ui.common.PaddingPreferenceFragment
 import org.fcitx.fcitx5.android.utils.addPreference
@@ -21,6 +22,21 @@ class LicensesFragment : PaddingPreferenceFragment() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         lifecycleScope.launch {
             preferenceScreen = preferenceManager.createPreferenceScreen(requireContext()).apply {
+                // Add original fcitx5-android project
+                addPreference(
+                    title = "fcitx5-android:${BuildConfig.VERSION_NAME}",
+                    summary = "LGPL-2.1-or-later"
+                ) {
+                    AlertDialog.Builder(context)
+                        .setTitle("fcitx5-android")
+                        .setMessage("GNU Lesser General Public License v2.1\n\nThis is the original Fcitx5 Android project.")
+                        .setPositiveButton("View License") { _, _ ->
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.gnu.org/licenses/old-licenses/lgpl-2.1")))
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                }
+
                 val jsonString = resources.openRawResource(R.raw.aboutlibraries)
                     .bufferedReader()
                     .use { it.readText() }
@@ -44,6 +60,7 @@ class LicensesFragment : PaddingPreferenceFragment() {
     }
 
     private fun showLicenseDialog(uniqueId: String, licenses: Set<License>): Boolean {
+        if (licenses.isEmpty()) return true
         when (licenses.size) {
             0 -> {}
             1 -> showLicenseContent(licenses.first())

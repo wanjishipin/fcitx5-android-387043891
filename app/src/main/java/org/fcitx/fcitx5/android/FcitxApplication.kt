@@ -174,6 +174,17 @@ class FcitxApplication : Application() {
             "${BuildConfig.APPLICATION_ID}.action.RESTART_FCITX_INSTANCE"
 
         /**
+         * Restart the application
+         */
+        fun restartApp() {
+            val context = getInstance()
+            val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+            intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            context.startActivity(intent)
+            Process.killProcess(Process.myPid())
+        }
+
+        /**
          * This permission is requested by com.android.shell, makes it possible to restart
          * fcitx instance from `adb shell am` command:
          * ```sh
